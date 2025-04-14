@@ -31,14 +31,22 @@ export default async function StocksPage() {
         const holdings = calculateTotalHoldings(stockTransactions);
         const value = holdings * averagePrice;
 
+        // Make sure we keep the notes data from the original stock object
         return {
             ...stock,
             averagePrice,
             holdings,
             value,
             transactions: stockTransactions.length,
+            notes: stock.notes || [], // Ensure notes are passed along
         };
     });
+
+    // Log for debugging
+    console.log("Stock notes data sample:",
+        enhancedStocks.length > 0 ?
+            `First stock has ${enhancedStocks[0].notes?.length || 0} notes` :
+            "No stocks available");
 
     return (
         <div className="space-y-6">

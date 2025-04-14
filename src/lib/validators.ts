@@ -8,6 +8,18 @@ export const stockSchema = z.object({
     sectorId: z.string().optional(),
 });
 
+// Stock with note validation schema
+export const stockWithNoteSchema = stockSchema.extend({
+    includeNote: z.boolean().default(false),
+    noteContent: z.string().max(1000, "Note must be 1000 characters or less").optional(),
+}).refine(
+    (data) => !data.includeNote || (data.includeNote && data.noteContent && data.noteContent.length > 0),
+    {
+        message: "Note content is required when including a note",
+        path: ["noteContent"],
+    }
+);
+
 export type StockFormValues = z.infer<typeof stockSchema>;
 
 // Transaction validation schema
@@ -61,4 +73,5 @@ export const userProfileSchema = z.object({
     email: z.string().email("Invalid email address"),
 });
 
+export type StockWithNoteFormValues = z.infer<typeof stockWithNoteSchema>;
 export type UserProfileFormValues = z.infer<typeof userProfileSchema>;

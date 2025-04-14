@@ -45,7 +45,11 @@ export default async function StockPage({ params }: StockPageProps) {
         averagePrice,
         holdings,
         value,
+        notes: stock.notes || [], // Ensure notes are available
     };
+
+    // Log for debugging
+    console.log(`Stock ${stock.ticker} has ${stock.notes?.length || 0} notes`);
 
     return (
         <div className="space-y-6">
@@ -60,7 +64,7 @@ export default async function StockPage({ params }: StockPageProps) {
                 </div>
             </div>
 
-            <StockNotes stockId={stock.id} notes={stock.notes} />
+            <StockNotes stockId={stock.id} notes={stock.notes || []} />
         </div>
     );
 }

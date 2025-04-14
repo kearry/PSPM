@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
@@ -18,7 +18,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontalIcon, PencilIcon, TrashIcon } from "lucide-react";
+import {
+    MoreHorizontalIcon,
+    PencilIcon,
+    TrashIcon,
+    FileTextIcon,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import EditStockForm from "@/components/stocks/edit-stock-form";
 import DeleteStockDialog from "@/components/stocks/delete-stock-dialog";
@@ -36,6 +41,10 @@ interface Stock {
     holdings: number;
     value: number;
     transactions: number;
+    notes?: {
+        id: string;
+        content: string;
+    }[];
 }
 
 interface Sector {
@@ -208,13 +217,14 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                             </span>
                                         )}
                                     </th>
+                                    <th className="text-center font-medium py-4 px-6">Notes</th>
                                     <th className="text-right font-medium py-4 px-6"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {filteredStocks.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                                        <td colSpan={8} className="py-6 text-center text-muted-foreground">
                                             {stocks.length === 0
                                                 ? "No stocks in your portfolio. Add your first stock to get started."
                                                 : "No stocks match your filters."}
@@ -244,9 +254,29 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                                     : "—"}
                                             </td>
                                             <td className="py-4 px-6 text-right font-medium">
-                                                {stock.value > 0
-                                                    ? formatCurrency(stock.value)
-                                                    : formatCurrency(0)}
+                                                {formatCurrency(stock.value)}
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                {stock.notes && stock.notes.length > 0 ? (
+                                                    <div className="relative group inline-flex justify-center">
+                                                        <div className="cursor-pointer hover:text-primary">
+                                                            <FileTextIcon className="h-5 w-5" />
+                                                        </div>
+                                                        <div className="invisible absolute z-10 w-64 -translate-x-1/2 -translate-y-8 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground opacity-0 shadow-md transition-all group-hover:visible group-hover:opacity-100">
+                                                            <div className="font-semibold mb-1">{stock.notes.length} {stock.notes.length === 1 ? 'note' : 'notes'}</div>
+                                                            <div className="line-clamp-2 text-muted-foreground">
+                                                                {stock.notes[0].content}
+                                                            </div>
+                                                            <div className="text-right mt-1">
+                                                                <Link href={`/stocks/${stock.id}`} className="text-primary text-xs hover:underline">
+                                                                    View all
+                                                                </Link>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">No notes</span>
+                                                )}
                                             </td>
                                             <td className="py-4 px-6 text-right">
                                                 <DropdownMenu>

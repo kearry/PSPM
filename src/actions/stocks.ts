@@ -1,10 +1,11 @@
 "use server";
 
 import { prisma } from "@/lib/db";
-import { StockFormValues } from "@/lib/validators";
+import { StockFormValues, StockWithNoteFormValues } from "@/lib/validators";
 import { createAuditLog } from "@/lib/utils";
 import { getCurrentUser } from "./user";
 import { revalidatePath } from "next/cache";
+import { createNote } from "./notes";
 
 /**
  * Get all stocks for the current user
@@ -18,6 +19,16 @@ export async function getStocks() {
             include: {
                 sector: true,
                 transactions: true,
+                notes: {
+                    select: {
+                        id: true,
+                        content: true,
+                        createdAt: true,
+                    },
+                    orderBy: {
+                        createdAt: "desc",
+                    },
+                },
             },
             orderBy: { createdAt: "desc" },
         });
@@ -47,6 +58,11 @@ export async function getStockById(id: string) {
                     orderBy: { date: "desc" },
                 },
                 notes: {
+                    select: {
+                        id: true,
+                        content: true,
+                        createdAt: true,
+                    },
                     orderBy: { createdAt: "desc" },
                 },
             },
@@ -82,12 +98,15 @@ export async function createStock(data: StockFormValues) {
             return { success: false, error: "You already have a stock with this ticker" };
         }
 
+        // Handle "none" value for sectorId
+        const sectorId = data.sectorId === "none" ? null : data.sectorId;
+
         // Create the stock
         const stock = await prisma.stock.create({
             data: {
                 ticker: data.ticker.toUpperCase(),
                 name: data.name,
-                sectorId: data.sectorId || null,
+                sectorId: sectorId || null,
                 userId: user.id,
             },
         });
@@ -147,13 +166,16 @@ export async function updateStock(id: string, data: StockFormValues) {
             }
         }
 
+        // Handle "none" value for sectorId
+        const sectorId = data.sectorId === "none" ? null : data.sectorId;
+
         // Update the stock
         const updatedStock = await prisma.stock.update({
             where: { id },
             data: {
                 ticker: data.ticker.toUpperCase(),
                 name: data.name,
-                sectorId: data.sectorId || null,
+                sectorId: sectorId || null,
             },
         });
 

@@ -131,10 +131,12 @@ export async function createNote(data: NoteFormValues) {
 
         if (data.stockId) {
             revalidatePath(`/stocks/${data.stockId}`);
+            revalidatePath("/stocks");
         }
 
         if (data.transactionId) {
             revalidatePath(`/transactions/${data.transactionId}`);
+            revalidatePath("/transactions");
         }
 
         return { success: true, data: note };
@@ -222,18 +224,22 @@ export async function updateNote(id: string, data: NoteFormValues) {
 
         if (note.stockId) {
             revalidatePath(`/stocks/${note.stockId}`);
+            revalidatePath("/stocks");
         }
 
         if (data.stockId && note.stockId !== data.stockId) {
             revalidatePath(`/stocks/${data.stockId}`);
+            revalidatePath("/stocks");
         }
 
         if (note.transactionId) {
             revalidatePath(`/transactions/${note.transactionId}`);
+            revalidatePath("/transactions");
         }
 
         if (data.transactionId && note.transactionId !== data.transactionId) {
             revalidatePath(`/transactions/${data.transactionId}`);
+            revalidatePath("/transactions");
         }
 
         return { success: true, data: updatedNote };
@@ -283,10 +289,12 @@ export async function deleteNote(id: string) {
 
         if (stockId) {
             revalidatePath(`/stocks/${stockId}`);
+            revalidatePath("/stocks");
         }
 
         if (transactionId) {
             revalidatePath(`/transactions/${transactionId}`);
+            revalidatePath("/transactions");
         }
 
         return { success: true };
