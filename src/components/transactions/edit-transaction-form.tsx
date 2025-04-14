@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { TransactionFormValues, transactionSchema, TransactionWithNoteFormValues, transactionWithNoteSchema } from "@/lib/validators";
-import { createTransaction } from "@/actions/transactions";
+import { TransactionWithNoteFormValues, transactionWithNoteSchema } from "@/lib/validators";
+import { updateTransaction } from "@/actions/transactions";
 import { createNote } from "@/actions/notes";
-import { TransactionType } from "@/lib/constants";
+import { TransactionType, TransactionTypeValue } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 import {
     Dialog,
@@ -39,9 +39,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getStocks } from "@/actions/stocks";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+
+interface Transaction {
+    id: string;
+    type: string;
+    quantity: number;
+    price: number;
+    date: Date;
+    stock: {
+        id: string;
+        ticker: string;
+        name: string;
+    };
+}
 
 interface Stock {
     id: string;
@@ -49,59 +61,49 @@ interface Stock {
     name: string;
 }
 
-interface AddTransactionFormProps {
-    stock?: Stock;
+interface EditTransactionFormProps {
+    transaction: Transaction;
+    stocks: Stock[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
-export default function AddTransactionForm({
-    stock,
+export default function EditTransactionForm({
+    transaction,
+    stocks,
     open,
     onOpenChange,
-}: AddTransactionFormProps) {
+}: EditTransactionFormProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const [stocks, setStocks] = useState<Stock[]>([]);
     const [includeNote, setIncludeNote] = useState(false);
 
     const form = useForm<TransactionWithNoteFormValues>({
         resolver: zodResolver(transactionWithNoteSchema),
         defaultValues: {
-            stockId: stock?.id || "",
-            type: TransactionType.BUY,
-            quantity: 0,
-            price: 0,
-            date: new Date(),
+            stockId: transaction.stock.id,
+            type: transaction.type as TransactionTypeValue,
+            quantity: transaction.quantity,
+            price: transaction.price,
+            date: new Date(transaction.date),
             includeNote: false,
             noteContent: "",
         },
     });
 
-    // Load stocks when dialog opens
-    const handleOpenChange = async (open: boolean) => {
-        onOpenChange(open);
-        if (open && stocks.length === 0) {
-            const { success, data } = await getStocks();
-            if (success && data) {
-                setStocks(data);
-            }
-        }
-
-        if (open) {
-            // Reset form when opening
-            form.reset({
-                stockId: stock?.id || "",
-                type: TransactionType.BUY,
-                quantity: 0,
-                price: 0,
-                date: new Date(),
-                includeNote: false,
-                noteContent: "",
-            });
-            setIncludeNote(false);
-        }
-    };
+    // Update form values when transaction changes
+    useEffect(() => {
+        form.reset({
+            stockId: transaction.stock.id,
+            type: transaction.type as TransactionTypeValue,
+            quantity: transaction.quantity,
+            price: transaction.price,
+            date: new Date(transaction.date),
+            includeNote: false,
+            noteContent: "",
+        });
+        setIncludeNote(false);
+    }, [transaction, form]);
 
     // Handle the include note checkbox
     const handleIncludeNoteChange = (checked: boolean) => {
@@ -112,8 +114,8 @@ export default function AddTransactionForm({
     const onSubmit = async (data: TransactionWithNoteFormValues) => {
         setIsLoading(true);
         try {
-            // Extract transaction data
-            const transactionData: TransactionFormValues = {
+            // Extract transaction data without note fields
+            const transactionData = {
                 stockId: data.stockId,
                 type: data.type,
                 quantity: data.quantity,
@@ -121,11 +123,11 @@ export default function AddTransactionForm({
                 date: data.date,
             };
 
-            // Create transaction
-            const result = await createTransaction(transactionData);
+            // Update the transaction
+            const result = await updateTransaction(transaction.id, transactionData);
 
             if (result.success) {
-                // If including a note and transaction created successfully
+                // If including a note and transaction updated successfully
                 if (data.includeNote && data.noteContent && result.data) {
                     // Create note linked to the transaction
                     await createNote({
@@ -134,20 +136,15 @@ export default function AddTransactionForm({
                     });
                 }
 
-                // Get stock details for the toast message
-                const selectedStock = stock || stocks.find(s => s.id === data.stockId);
-                const ticker = selectedStock?.ticker || "stock";
-
                 toast({
-                    title: "Transaction added",
-                    description: `${data.type === TransactionType.BUY ? "Bought" : "Sold"} ${data.quantity} shares of ${ticker}.`,
+                    title: "Transaction updated",
+                    description: `Transaction for ${transaction.stock.ticker} has been updated.`,
                 });
-                form.reset();
                 onOpenChange(false);
             } else {
                 toast({
                     title: "Error",
-                    description: result.error || "Failed to add transaction.",
+                    description: result.error || "Failed to update transaction.",
                     variant: "destructive",
                 });
             }
@@ -163,12 +160,12 @@ export default function AddTransactionForm({
     };
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Add Transaction</DialogTitle>
+                    <DialogTitle>Edit Transaction</DialogTitle>
                     <DialogDescription>
-                        Record a buy or sell transaction for {stock?.ticker || "a stock"}
+                        Update the transaction details for {transaction.stock.ticker}
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -181,8 +178,7 @@ export default function AddTransactionForm({
                                     <FormLabel>Stock</FormLabel>
                                     <Select
                                         onValueChange={field.onChange}
-                                        value={field.value}
-                                        disabled={!!stock} // Disable if stock is provided
+                                        defaultValue={field.value}
                                     >
                                         <FormControl>
                                             <SelectTrigger>
@@ -190,17 +186,11 @@ export default function AddTransactionForm({
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {stock ? (
-                                                <SelectItem value={stock.id}>
+                                            {stocks.map((stock) => (
+                                                <SelectItem key={stock.id} value={stock.id}>
                                                     {stock.ticker}: {stock.name}
                                                 </SelectItem>
-                                            ) : (
-                                                stocks.map((s) => (
-                                                    <SelectItem key={s.id} value={s.id}>
-                                                        {s.ticker}: {s.name}
-                                                    </SelectItem>
-                                                ))
-                                            )}
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -368,7 +358,7 @@ export default function AddTransactionForm({
                                 Cancel
                             </Button>
                             <Button type="submit" disabled={isLoading}>
-                                {isLoading ? "Adding..." : "Add Transaction"}
+                                {isLoading ? "Saving..." : "Save Changes"}
                             </Button>
                         </DialogFooter>
                     </form>

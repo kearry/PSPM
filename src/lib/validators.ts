@@ -24,7 +24,20 @@ export const transactionSchema = z.object({
     }),
 });
 
+// Transaction with note validation schema
+export const transactionWithNoteSchema = transactionSchema.extend({
+    includeNote: z.boolean().default(false),
+    noteContent: z.string().max(1000, "Note must be 1000 characters or less").optional(),
+}).refine(
+    (data) => !data.includeNote || (data.includeNote && data.noteContent && data.noteContent.length > 0),
+    {
+        message: "Note content is required when including a note",
+        path: ["noteContent"],
+    }
+);
+
 export type TransactionFormValues = z.infer<typeof transactionSchema>;
+export type TransactionWithNoteFormValues = z.infer<typeof transactionWithNoteSchema>;
 
 // Note validation schema
 export const noteSchema = z.object({

@@ -17,6 +17,15 @@ export async function getTransactions() {
             where: { userId: user.id },
             include: {
                 stock: true,
+                notes: {
+                    select: {
+                        id: true,
+                        content: true,
+                    },
+                    orderBy: {
+                        createdAt: "desc",
+                    },
+                },
             },
             orderBy: { date: "desc" },
         });
@@ -270,6 +279,11 @@ export async function exportTransactionsToCSV() {
                         name: true,
                     },
                 },
+                notes: {
+                    select: {
+                        content: true,
+                    },
+                },
             },
             orderBy: { date: "desc" },
         });
@@ -283,6 +297,7 @@ export async function exportTransactionsToCSV() {
             Quantity: transaction.quantity,
             Price: transaction.price,
             Total: transaction.price * transaction.quantity,
+            Notes: transaction.notes.map(note => note.content).join(" | "),
         }));
 
         return { success: true, data: exportData };
