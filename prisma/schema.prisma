@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(uuid())
+  name         String
+  email        String         @unique
+  createdAt    DateTime       @default(now())
+  stocks       Stock[]
+  transactions Transaction[]
+  notes        Note[]
+}
+
+model Stock {
+  id           String         @id @default(uuid())
+  ticker       String
+  name         String
+  sectorId     String?
+  sector       Sector?        @relation(fields: [sectorId], references: [id])
+  createdAt    DateTime       @default(now())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  notes        Note[]
+}
+
+model Transaction {
+  id           String         @id @default(uuid())
+  stockId      String
+  stock        Stock          @relation(fields: [stockId], references: [id])
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  type         String         // 'BUY' or 'SELL' - replacing enum with string
+  quantity     Float
+  price        Float
+  date         DateTime
+  notes        Note[]
+}
+
+model Note {
+  id             String         @id @default(uuid())
+  content        String
+  createdAt      DateTime       @default(now())
+  stockId        String?
+  stock          Stock?         @relation(fields: [stockId], references: [id])
+  transactionId  String?
+  transaction    Transaction?   @relation(fields: [transactionId], references: [id])
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+}
+
+model Sector {
+  id       String   @id @default(uuid())
+  name     String   @unique
+  stocks   Stock[]
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., CREATE_TRANSACTION
+  entityType  String   // Stock | Transaction | Note
+  entityId    String
+  payload     String   // optional JSON
+  timestamp   DateTime @default(now())
+  userId      String
+}
