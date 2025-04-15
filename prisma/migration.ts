@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 async function migrate() {
     try {
-        console.log('Starting migration to add exchange rate and FX fee fields...');
+        console.log('Starting migration to add or update exchangeRate and fxFee fields...');
 
         // Apply migration by setting default values
         console.log('Updating all existing transactions with default values...');
@@ -18,8 +18,9 @@ async function migrate() {
                 await prisma.transaction.update({
                     where: { id: transaction.id },
                     data: {
-                        exchangeRate: 1.0, // Default to 1.0 (no conversion)
-                        fxFee: 0.0,      // Default to no fee
+                        // Set default values if not already set
+                        exchangeRate: transaction.exchangeRate ?? 1.0,
+                        fxFee: transaction.fxFee ?? 0.0,
                     },
                 });
                 updated++;

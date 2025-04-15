@@ -87,7 +87,7 @@ export async function createTransaction(data: TransactionFormValues) {
             return { success: false, error: "Stock not found" };
         }
 
-        // Create the transaction
+        // Create the transaction with required exchangeRate and fxFee
         const transaction = await prisma.transaction.create({
             data: {
                 stockId: data.stockId,
@@ -165,17 +165,19 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
             return { success: false, error: "Stock not found" };
         }
 
-        // Update the transaction
+        // Update the transaction - using direct update because our fields match the schema
         const updatedTransaction = await prisma.transaction.update({
             where: { id },
             data: {
-                stockId: data.stockId,
                 type: data.type,
                 quantity: data.quantity,
                 price: data.price,
+                date: data.date,
+                // Only update stockId if it has changed
+                ...(transaction.stockId !== data.stockId ? { stockId: data.stockId } : {}),
+                // Always include these fields
                 exchangeRate: data.exchangeRate || 1,
                 fxFee: data.fxFee || 0,
-                date: data.date,
             },
             include: {
                 stock: true,
@@ -201,7 +203,9 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
         revalidatePath("/transactions");
         revalidatePath(`/transactions/${id}`);
         revalidatePath(`/stocks/${transaction.stockId}`);
-        revalidatePath(`/stocks/${data.stockId}`);
+        if (transaction.stockId !== data.stockId) {
+            revalidatePath(`/stocks/${data.stockId}`);
+        }
         revalidatePath("/dashboard");
 
         return { success: true, data: updatedTransaction };
