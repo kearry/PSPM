@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { StockWithNoteFormValues, stockWithNoteSchema } from "@/lib/validators";
@@ -59,37 +59,33 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
     });
 
     // Load sectors when dialog opens
-    const handleOpenChange = async (open: boolean) => {
-        // First, load sectors if they're not already loaded
-        if (open && sectors.length === 0) {
-            setIsLoading(true);
-            try {
+    useEffect(() => {
+        const loadSectors = async () => {
+            if (open && sectors.length === 0) {
                 const { success, data } = await getSectors();
                 if (success && data) {
                     setSectors(data);
                 }
-            } catch (error) {
-                console.error("Error loading sectors:", error);
-            } finally {
-                setIsLoading(false);
             }
-        }
+        };
 
-        // Reset form when opening to ensure default values are used
+        loadSectors();
+    }, [open, sectors.length]);
+
+    // Reset form when dialog closes/opens
+    useEffect(() => {
         if (open) {
             form.reset({
                 ticker: "",
                 name: "",
-                sectorId: "none", // Ensure "none" is set when form opens
+                sectorId: "none",
                 includeNote: false,
                 noteContent: "",
             });
             setIncludeNote(false);
         }
-
-        // Update the open state
         onOpenChange(open);
-    };
+    }, [open, form]);
 
     // Handle the include note checkbox
     const handleIncludeNoteChange = (checked: boolean) => {
@@ -97,7 +93,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
         form.setValue("includeNote", checked);
     };
 
-    const onSubmit = async (data: StockWithNoteFormValues) => {
+    const onSubmit = async (data: StockFormValues) => {
         setIsLoading(true);
         try {
             // Extract stock data without note fields
@@ -106,8 +102,8 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                 name: data.name,
                 sectorId: data.sectorId,
             };
-
-            const result = await createStock(stockData);
+            
+            const result = await createStock(data);
 
             if (result.success) {
                 // If including a note and stock created successfully
@@ -151,7 +147,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
     };
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Add Stock</DialogTitle>
@@ -200,7 +196,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                                     <FormLabel>Sector</FormLabel>
                                     <Select
                                         onValueChange={field.onChange}
-                                        value={field.value || "none"} // Always ensure a valid value
+                                        value={field.value || "none"}
                                     >
                                         <FormControl>
                                             <SelectTrigger>
@@ -208,7 +204,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="none">None</SelectItem>
+                                            <SelectItem value="">None</SelectItem>
                                             {sectors.map((sector) => (
                                                 <SelectItem key={sector.id} value={sector.id}>
                                                     {sector.name}
