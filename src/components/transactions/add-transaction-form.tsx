@@ -62,6 +62,7 @@ export default function AddTransactionForm({
 }: AddTransactionFormProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingStocks, setIsLoadingStocks] = useState(false);
     const [stocks, setStocks] = useState<Stock[]>([]);
     const [includeNote, setIncludeNote] = useState(false);
 
@@ -79,17 +80,31 @@ export default function AddTransactionForm({
     });
 
     // Load stocks when dialog opens
-    const handleOpenChange = async (open: boolean) => {
-        onOpenChange(open);
-        if (open && stocks.length === 0) {
-            const { success, data } = await getStocks();
-            if (success && data) {
-                setStocks(data);
+    useEffect(() => {
+        async function loadStocks() {
+            if (open && !stock) {
+                setIsLoadingStocks(true);
+                try {
+                    const { success, data } = await getStocks();
+                    if (success && data) {
+                        setStocks(data);
+                    } else {
+                        console.error("Failed to load stocks");
+                    }
+                } catch (error) {
+                    console.error("Error loading stocks:", error);
+                } finally {
+                    setIsLoadingStocks(false);
+                }
             }
         }
 
+        loadStocks();
+    }, [open, stock]);
+
+    // Reset form when opening
+    useEffect(() => {
         if (open) {
-            // Reset form when opening
             form.reset({
                 stockId: stock?.id || "",
                 type: TransactionType.BUY,
@@ -101,7 +116,7 @@ export default function AddTransactionForm({
             });
             setIncludeNote(false);
         }
-    };
+    }, [open, stock, form]);
 
     // Handle the include note checkbox
     const handleIncludeNoteChange = (checked: boolean) => {
@@ -163,7 +178,7 @@ export default function AddTransactionForm({
     };
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Add Transaction</DialogTitle>
@@ -182,11 +197,11 @@ export default function AddTransactionForm({
                                     <Select
                                         onValueChange={field.onChange}
                                         value={field.value}
-                                        disabled={!!stock} // Disable if stock is provided
+                                        disabled={!!stock || isLoadingStocks} // Disable if stock is provided or loading
                                     >
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select a stock" />
+                                                <SelectValue placeholder={isLoadingStocks ? "Loading stocks..." : "Select a stock"} />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
@@ -367,7 +382,7 @@ export default function AddTransactionForm({
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={isLoading}>
+                            <Button type="submit" disabled={isLoading || (!stock && !form.getValues("stockId"))}>
                                 {isLoading ? "Adding..." : "Add Transaction"}
                             </Button>
                         </DialogFooter>
