@@ -34,16 +34,18 @@ model Stock {
 }
 
 model Transaction {
-  id           String         @id @default(uuid())
-  stockId      String
-  stock        Stock          @relation(fields: [stockId], references: [id])
-  userId       String
-  user         User           @relation(fields: [userId], references: [id])
-  type         String         // 'BUY' or 'SELL' - replacing enum with string
-  quantity     Float
-  price        Float
-  date         DateTime
-  notes        Note[]
+  id               String         @id @default(uuid())
+  stockId          String
+  stock            Stock          @relation(fields: [stockId], references: [id])
+  userId           String
+  user             User           @relation(fields: [userId], references: [id])
+  type             String         // 'BUY' or 'SELL' - replacing enum with string
+  quantity         Float
+  price            Float
+  exchangeRate     Float?         // New field - exchange rate for foreign currency transactions
+  fxFee            Float?         // New field - foreign exchange fee
+  date             DateTime
+  notes            Note[]
 }
 
 model Note {

@@ -31,12 +31,42 @@ export function formatDate(date: Date): string {
 }
 
 /**
+ * Calculates the total cost or proceeds of a transaction, including FX fees if applicable
+ */
+export function calculateTransactionTotal(transaction: {
+    quantity: number;
+    price: number;
+    type: string;
+    exchangeRate?: number | null;
+    fxFee?: number | null;
+}): number {
+    const baseAmount = transaction.quantity * transaction.price;
+
+    // If there's an exchange rate, convert the amount
+    const convertedAmount = transaction.exchangeRate
+        ? baseAmount * transaction.exchangeRate
+        : baseAmount;
+
+    // For BUY transactions, add FX fee; for SELL transactions, subtract FX fee
+    if (transaction.fxFee) {
+        if (transaction.type === TransactionType.BUY) {
+            return convertedAmount + transaction.fxFee;
+        } else {
+            return convertedAmount - transaction.fxFee;
+        }
+    }
+
+    return convertedAmount;
+}
+
+/**
  * Calculates average purchase price for a stock based on transactions
  */
 export function calculateAveragePrice(transactions: {
     type: string;
     quantity: number;
     price: number;
+    exchangeRate?: number | null;
 }[]): number {
     const buyTransactions = transactions.filter(
         (transaction) => transaction.type === TransactionType.BUY
@@ -45,7 +75,14 @@ export function calculateAveragePrice(transactions: {
     if (buyTransactions.length === 0) return 0;
 
     const totalCost = buyTransactions.reduce(
-        (sum, transaction) => sum + transaction.quantity * transaction.price,
+        (sum, transaction) => {
+            // Apply exchange rate if available
+            const convertedPrice = transaction.exchangeRate
+                ? transaction.price * transaction.exchangeRate
+                : transaction.price;
+
+            return sum + transaction.quantity * convertedPrice;
+        },
         0
     );
 

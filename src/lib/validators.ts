@@ -30,6 +30,8 @@ export const transactionSchema = z.object({
     }),
     quantity: z.number().positive("Quantity must be positive"),
     price: z.number().positive("Price must be positive"),
+    exchangeRate: z.number().positive("Exchange rate must be positive").optional(),
+    fxFee: z.number().min(0, "FX fee must be non-negative").optional(),
     date: z.date({
         required_error: "Date is required",
         invalid_type_error: "That's not a valid date",

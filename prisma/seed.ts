@@ -94,6 +94,7 @@ async function main() {
     // Create sample transactions
     const today = new Date();
 
+    // Regular local currency transactions
     for (const stock of stocks) {
         // Create a BUY transaction
         await prisma.transaction.create({
@@ -104,6 +105,8 @@ async function main() {
                 quantity: 10,
                 price: stock.ticker === 'AAPL' ? 175.5 :
                     stock.ticker === 'MSFT' ? 340.2 : 150.75,
+                exchangeRate: 1.0, // Local currency
+                fxFee: 0.0,       // No FX fee
                 date: subDays(today, Math.floor(Math.random() * 30)),
             }
         });
@@ -117,6 +120,8 @@ async function main() {
                 quantity: 5,
                 price: stock.ticker === 'AAPL' ? 180.25 :
                     stock.ticker === 'MSFT' ? 345.8 : 155.3,
+                exchangeRate: 1.0, // Local currency
+                fxFee: 0.0,       // No FX fee
                 date: subDays(today, Math.floor(Math.random() * 20)),
             }
         });
@@ -130,13 +135,33 @@ async function main() {
                     type: TransactionType.SELL,
                     quantity: 3,
                     price: 190.5,
+                    exchangeRate: 1.0, // Local currency
+                    fxFee: 0.0,       // No FX fee
                     date: subDays(today, Math.floor(Math.random() * 10)),
                 }
             });
         }
     }
 
-    console.log('Created sample transactions');
+    // Add some foreign currency transactions as examples
+    const msftStock = stocks.find(s => s.ticker === 'MSFT');
+    if (msftStock) {
+        // Add a EUR transaction for MSFT
+        await prisma.transaction.create({
+            data: {
+                stockId: msftStock.id,
+                userId: user.id,
+                type: TransactionType.BUY,
+                quantity: 8,
+                price: 320.75, // Price in EUR
+                exchangeRate: 1.10, // Convert EUR to USD
+                fxFee: 12.50,     // FX fee in USD
+                date: subDays(today, 5),
+            }
+        });
+    }
+
+    console.log('Created sample transactions (including foreign currency examples)');
 
     // Create sample notes
     await prisma.note.create({
@@ -154,6 +179,17 @@ async function main() {
             stockId: stocks[1].id,
         }
     });
+
+    // Add a note about foreign currency transaction
+    if (msftStock) {
+        await prisma.note.create({
+            data: {
+                content: 'Purchased through European broker with EUR - watch exchange rates for future trades',
+                userId: user.id,
+                stockId: msftStock.id,
+            }
+        });
+    }
 
     console.log('Created sample notes');
 

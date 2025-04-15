@@ -41,12 +41,15 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatCurrency } from "@/lib/utils";
 
 interface Transaction {
     id: string;
     type: string;
     quantity: number;
     price: number;
+    exchangeRate?: number | null;
+    fxFee?: number | null;
     date: Date;
     stock: {
         id: string;
@@ -77,6 +80,9 @@ export default function EditTransactionForm({
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [includeNote, setIncludeNote] = useState(false);
+    const [isForeignCurrency, setIsForeignCurrency] = useState(
+        !!transaction.exchangeRate && transaction.exchangeRate !== 1
+    );
 
     const form = useForm<TransactionWithNoteFormValues>({
         resolver: zodResolver(transactionWithNoteSchema),
@@ -85,6 +91,8 @@ export default function EditTransactionForm({
             type: transaction.type as TransactionTypeValue,
             quantity: transaction.quantity,
             price: transaction.price,
+            exchangeRate: transaction.exchangeRate || 1,
+            fxFee: transaction.fxFee || 0,
             date: new Date(transaction.date),
             includeNote: false,
             noteContent: "",
@@ -98,10 +106,15 @@ export default function EditTransactionForm({
             type: transaction.type as TransactionTypeValue,
             quantity: transaction.quantity,
             price: transaction.price,
+            exchangeRate: transaction.exchangeRate || 1,
+            fxFee: transaction.fxFee || 0,
             date: new Date(transaction.date),
             includeNote: false,
             noteContent: "",
         });
+
+        // Check if this was a foreign currency transaction
+        setIsForeignCurrency(!!transaction.exchangeRate && transaction.exchangeRate !== 1);
         setIncludeNote(false);
     }, [transaction, form]);
 
@@ -111,15 +124,50 @@ export default function EditTransactionForm({
         form.setValue("includeNote", checked);
     };
 
+    // Toggle foreign currency fields
+    const handleForeignCurrencyToggle = (checked: boolean) => {
+        setIsForeignCurrency(checked);
+        if (!checked) {
+            form.setValue("exchangeRate", 1);
+            form.setValue("fxFee", 0);
+        }
+    };
+
+    // Calculate total cost based on current form values
+    const calculateTotal = () => {
+        const values = form.getValues();
+        const baseTotal = values.quantity * values.price;
+
+        if (isForeignCurrency && values.exchangeRate) {
+            const convertedTotal = baseTotal * values.exchangeRate;
+            if (values.fxFee) {
+                return values.type === TransactionType.BUY
+                    ? convertedTotal + values.fxFee
+                    : convertedTotal - values.fxFee;
+            }
+            return convertedTotal;
+        }
+
+        return baseTotal;
+    };
+
     const onSubmit = async (data: TransactionWithNoteFormValues) => {
         setIsLoading(true);
         try {
+            // If not using foreign currency, set exchange rate to 1 and fx fee to 0
+            if (!isForeignCurrency) {
+                data.exchangeRate = 1;
+                data.fxFee = 0;
+            }
+
             // Extract transaction data without note fields
             const transactionData = {
                 stockId: data.stockId,
                 type: data.type,
                 quantity: data.quantity,
                 price: data.price,
+                exchangeRate: data.exchangeRate,
+                fxFee: data.fxFee,
                 date: data.date,
             };
 
@@ -262,6 +310,98 @@ export default function EditTransactionForm({
                                 </FormItem>
                             )}
                         />
+
+                        {/* Foreign Currency Checkbox */}
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                                <Checkbox
+                                    checked={isForeignCurrency}
+                                    onCheckedChange={handleForeignCurrencyToggle}
+                                />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                                <FormLabel>
+                                    Foreign Currency Transaction
+                                </FormLabel>
+                                <FormDescription>
+                                    Enable if this transaction was made in a foreign currency
+                                </FormDescription>
+                            </div>
+                        </FormItem>
+
+                        {/* Exchange Rate - only shown when foreign currency is enabled */}
+                        {isForeignCurrency && (
+                            <FormField
+                                control={form.control}
+                                name="exchangeRate"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Exchange Rate</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                step="0.0001"
+                                                placeholder="1.0"
+                                                {...field}
+                                                value={field.value || 1}
+                                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Exchange rate to convert to local currency (e.g., 1.35 USD per EUR)
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
+                        {/* FX Fee - only shown when foreign currency is enabled */}
+                        {isForeignCurrency && (
+                            <FormField
+                                control={form.control}
+                                name="fxFee"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>FX Fee</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                {...field}
+                                                value={field.value || 0}
+                                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Fee charged for currency conversion
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
+                        {/* Display the total transaction value */}
+                        {form.getValues("quantity") > 0 && form.getValues("price") > 0 && (
+                            <div className="text-sm bg-muted p-3 rounded-md">
+                                <div className="font-medium">Transaction Total:</div>
+                                <div className="text-lg font-bold">
+                                    {formatCurrency(calculateTotal())}
+                                </div>
+                                {isForeignCurrency && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                        {form.getValues("quantity")} shares × {form.getValues("price")}
+                                        {isForeignCurrency ? " × " + form.getValues("exchangeRate") + " exchange rate" : ""}
+                                        {isForeignCurrency && form.getValues("fxFee") ?
+                                            (form.getValues("type") === TransactionType.BUY ?
+                                                " + " : " - ") + form.getValues("fxFee") + " FX fee" :
+                                            ""}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <FormField
                             control={form.control}

@@ -10,7 +10,8 @@
         "postinstall": "prisma generate",
         "db:push": "prisma db push",
         "db:studio": "prisma studio",
-        "db:seed": "prisma db seed"
+        "db:seed": "prisma db seed",
+        "migrate": "ts-node prisma/migration.ts"
     },
     "prisma": {
         "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

@@ -95,6 +95,8 @@ export async function createTransaction(data: TransactionFormValues) {
                 type: data.type,
                 quantity: data.quantity,
                 price: data.price,
+                exchangeRate: data.exchangeRate || 1,
+                fxFee: data.fxFee || 0,
                 date: data.date,
             },
             include: {
@@ -113,6 +115,8 @@ export async function createTransaction(data: TransactionFormValues) {
                 type: transaction.type,
                 quantity: transaction.quantity,
                 price: transaction.price,
+                exchangeRate: transaction.exchangeRate,
+                fxFee: transaction.fxFee,
             },
         });
 
@@ -169,6 +173,8 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
                 type: data.type,
                 quantity: data.quantity,
                 price: data.price,
+                exchangeRate: data.exchangeRate || 1,
+                fxFee: data.fxFee || 0,
                 date: data.date,
             },
             include: {
@@ -187,6 +193,8 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
                 type: updatedTransaction.type,
                 quantity: updatedTransaction.quantity,
                 price: updatedTransaction.price,
+                exchangeRate: updatedTransaction.exchangeRate,
+                fxFee: updatedTransaction.fxFee,
             },
         });
 
@@ -296,7 +304,10 @@ export async function exportTransactionsToCSV() {
             Type: transaction.type,
             Quantity: transaction.quantity,
             Price: transaction.price,
-            Total: transaction.price * transaction.quantity,
+            ExchangeRate: transaction.exchangeRate || 1,
+            FXFee: transaction.fxFee || 0,
+            Total: (transaction.price * transaction.quantity * (transaction.exchangeRate || 1)) +
+                (transaction.type === 'BUY' ? (transaction.fxFee || 0) : -(transaction.fxFee || 0)),
             Notes: transaction.notes.map(note => note.content).join(" | "),
         }));
 

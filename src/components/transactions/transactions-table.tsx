@@ -25,8 +25,9 @@ import {
     ArrowUpIcon,
     ArrowDownIcon,
     FileTextIcon,
+    CurrencyIcon,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, calculateTransactionTotal } from "@/lib/utils";
 import { TransactionType } from "@/lib/constants";
 import EditTransactionForm from "@/components/transactions/edit-transaction-form";
 import DeleteTransactionDialog from "@/components/transactions/delete-transaction-dialog";
@@ -36,6 +37,8 @@ interface Transaction {
     type: string;
     quantity: number;
     price: number;
+    exchangeRate?: number | null;
+    fxFee?: number | null;
     date: Date;
     stock: {
         id: string;
@@ -71,7 +74,8 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
     const [search, setSearch] = useState("");
     const [stockFilter, setStockFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-    const [sortBy, setSortBy] = useState<keyof Transaction | "stock">("date");
+    const [currencyFilter, setCurrencyFilter] = useState("all");
+    const [sortBy, setSortBy] = useState<keyof Transaction | "stock" | "total">("date");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
@@ -103,8 +107,27 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
         );
     }
 
+    // Apply currency filter
+    if (currencyFilter !== "all") {
+        filteredTransactions = filteredTransactions.filter(
+            (transaction) => {
+                if (currencyFilter === "foreign") {
+                    return !!transaction.exchangeRate && transaction.exchangeRate !== 1;
+                } else { // local
+                    return !transaction.exchangeRate || transaction.exchangeRate === 1;
+                }
+            }
+        );
+    }
+
+    // Add total to transactions for sorting
+    const transactionsWithTotal = filteredTransactions.map(transaction => ({
+        ...transaction,
+        total: calculateTransactionTotal(transaction),
+    }));
+
     // Apply sorting
-    filteredTransactions.sort((a, b) => {
+    transactionsWithTotal.sort((a, b) => {
         if (sortBy === "stock") {
             const tickerA = a.stock.ticker;
             const tickerB = b.stock.ticker;
@@ -117,6 +140,10 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
             const dateA = new Date(a.date).getTime();
             const dateB = new Date(b.date).getTime();
             return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
+        }
+
+        if (sortBy === "total") {
+            return sortDirection === "asc" ? a.total - b.total : b.total - a.total;
         }
 
         const valueA = a[sortBy];
@@ -136,7 +163,7 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
     });
 
     // Toggle sort direction when clicking on the same column
-    const handleSort = (column: keyof Transaction | "stock") => {
+    const handleSort = (column: keyof Transaction | "stock" | "total") => {
         if (sortBy === column) {
             setSortDirection(sortDirection === "asc" ? "desc" : "asc");
         } else {
@@ -175,6 +202,16 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                         <SelectItem value="all">All Types</SelectItem>
                         <SelectItem value={TransactionType.BUY}>Buy</SelectItem>
                         <SelectItem value={TransactionType.SELL}>Sell</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+                    <SelectTrigger className="sm:max-w-xs">
+                        <SelectValue placeholder="Filter by currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Currencies</SelectItem>
+                        <SelectItem value="local">Local Currency</SelectItem>
+                        <SelectItem value="foreign">Foreign Currency</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -240,24 +277,45 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                             </span>
                                         )}
                                     </th>
-                                    <th className="text-right font-medium py-4 px-6">Total</th>
+                                    <th
+                                        className="text-center font-medium py-4 px-3 cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleSort("exchangeRate")}
+                                    >
+                                        FX
+                                        {sortBy === "exchangeRate" && (
+                                            <span className="ml-1">
+                                                {sortDirection === "asc" ? "↑" : "↓"}
+                                            </span>
+                                        )}
+                                    </th>
+                                    <th
+                                        className="text-right font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleSort("total")}
+                                    >
+                                        Total
+                                        {sortBy === "total" && (
+                                            <span className="ml-1">
+                                                {sortDirection === "asc" ? "↑" : "↓"}
+                                            </span>
+                                        )}
+                                    </th>
                                     <th className="text-center font-medium py-4 px-6">Notes</th>
                                     <th className="text-right font-medium py-4 px-6"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {filteredTransactions.length === 0 ? (
+                                {transactionsWithTotal.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                                        <td colSpan={9} className="py-6 text-center text-muted-foreground">
                                             {transactions.length === 0
                                                 ? "No transactions yet. Add your first transaction to get started."
                                                 : "No transactions match your filters."}
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredTransactions.map((transaction) => {
-                                        const total = transaction.quantity * transaction.price;
+                                    transactionsWithTotal.map((transaction) => {
                                         const isBuy = transaction.type === TransactionType.BUY;
+                                        const isForeignCurrency = !!transaction.exchangeRate && transaction.exchangeRate !== 1;
 
                                         return (
                                             <tr key={transaction.id} className="hover:bg-muted/50">
@@ -279,8 +337,8 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                                     <div className="flex items-center">
                                                         <div
                                                             className={`mr-2 flex h-6 w-6 items-center justify-center rounded-full ${isBuy
-                                                                    ? "bg-green-100 dark:bg-green-900"
-                                                                    : "bg-red-100 dark:bg-red-900"
+                                                                ? "bg-green-100 dark:bg-green-900"
+                                                                : "bg-red-100 dark:bg-red-900"
                                                                 }`}
                                                         >
                                                             {isBuy ? (
@@ -298,8 +356,18 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                                 <td className="py-4 px-6 text-right">
                                                     {formatCurrency(transaction.price)}
                                                 </td>
+                                                <td className="py-4 px-3 text-center">
+                                                    {isForeignCurrency ? (
+                                                        <div className="flex flex-col items-center">
+                                                            <CurrencyIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                                            <span className="text-xs">
+                                                                {transaction.exchangeRate?.toFixed(4)}
+                                                            </span>
+                                                        </div>
+                                                    ) : null}
+                                                </td>
                                                 <td className="py-4 px-6 text-right font-medium">
-                                                    {formatCurrency(total)}
+                                                    {formatCurrency(transaction.total)}
                                                 </td>
                                                 <td className="py-4 px-6 text-center">
                                                     {transaction.notes && transaction.notes.length > 0 ? (

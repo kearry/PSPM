@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTransactionById } from "@/actions/transactions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, calculateTransactionTotal } from "@/lib/utils";
 import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon } from "lucide-react";
 import { TransactionType } from "@/lib/constants";
 import TransactionActions from "@/components/transactions/transaction-actions";
@@ -38,7 +38,8 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
     }
 
     const isBuy = transaction.type === TransactionType.BUY;
-    const total = transaction.quantity * transaction.price;
+    const total = calculateTransactionTotal(transaction);
+    const isForeignCurrency = transaction.exchangeRate !== null && transaction.exchangeRate !== 1;
 
     return (
         <div className="space-y-6">
@@ -66,8 +67,8 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
                     <div className="flex items-center gap-3">
                         <div
                             className={`flex h-9 w-9 items-center justify-center rounded-full ${isBuy
-                                    ? "bg-green-100 dark:bg-green-900"
-                                    : "bg-red-100 dark:bg-red-900"
+                                ? "bg-green-100 dark:bg-green-900"
+                                : "bg-red-100 dark:bg-red-900"
                                 }`}
                         >
                             {isBuy ? (
@@ -109,6 +110,36 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
                             </div>
                         </div>
                     </div>
+
+                    {isForeignCurrency && (
+                        <div className="mt-4 pt-4 border-t">
+                            <h3 className="font-medium mb-2">Foreign Currency Details</h3>
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">Exchange Rate</div>
+                                    <div className="text-lg font-medium">
+                                        {transaction.exchangeRate?.toFixed(4)}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">FX Fee</div>
+                                    <div className="text-lg font-medium">
+                                        {transaction.fxFee ? formatCurrency(transaction.fxFee) : "$0.00"}
+                                    </div>
+                                </div>
+                                <div className="col-span-2">
+                                    <div className="text-sm font-medium text-muted-foreground">Calculation</div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {transaction.quantity.toFixed(2)} × {formatCurrency(transaction.price)} ×{" "}
+                                        {transaction.exchangeRate?.toFixed(4)} {transaction.fxFee ?
+                                            (isBuy ? " + " : " - ") + formatCurrency(transaction.fxFee || 0) + " fee" :
+                                            ""}
+                                        {" = "}{formatCurrency(total)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
