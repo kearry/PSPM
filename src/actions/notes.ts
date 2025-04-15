@@ -7,6 +7,28 @@ import { getCurrentUser } from "./user";
 import { revalidatePath } from "next/cache";
 
 /**
+ * Get all notes for a specific stock
+ */
+export async function getNotesByStockId(stockId: string) {
+    try {
+        const user = await getCurrentUser();
+
+        const notes = await prisma.note.findMany({
+            where: {
+                stockId: stockId,
+                userId: user.id,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        return { success: true, data: notes };
+    } catch (error) {
+        console.error(`Error getting notes for stock ID ${stockId}:`, error);
+        return { success: false, error: "Failed to fetch notes for this stock" };
+    }
+}
+
+/**
  * Get all notes for the current user
  */
 export async function getNotes() {

@@ -46,13 +46,14 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
     const [isLoading, setIsLoading] = useState(false);
     const [sectors, setSectors] = useState<{ id: string; name: string }[]>([]);
     const [includeNote, setIncludeNote] = useState(false);
+    const [sectorLoadError, setSectorLoadError] = useState<string | null>(null); // State for sector loading errors
 
     const form = useForm<StockWithNoteFormValues>({
         resolver: zodResolver(stockWithNoteSchema),
         defaultValues: {
             ticker: "",
             name: "",
-            sectorId: "none", // Set a default value of "none" instead of undefined
+            sectorId: "none",
             includeNote: false,
             noteContent: "",
         },
@@ -62,19 +63,28 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
     useEffect(() => {
         const loadSectors = async () => {
             if (open && sectors.length === 0) {
-                const { success, data } = await getSectors();
+                const { success, data, error } = await getSectors();
                 if (success && data) {
                     setSectors(data);
+                    setSectorLoadError(null); // Clear any previous error
+                } else {
+                    console.error("Error loading sectors:", error);
+                    setSectorLoadError(error || "Failed to load sectors.");
+                    toast({
+                        title: "Error loading sectors",
+                        description: error || "Failed to load sectors.",
+                        variant: "destructive",
+                    });
                 }
             }
         };
 
         loadSectors();
-    }, [open, sectors.length]);
+    }, [open, sectors.length, toast]);
 
-    // Reset form when dialog closes/opens
+    // Reset form when dialog closes
     useEffect(() => {
-        if (open) {
+        if (!open) {
             form.reset({
                 ticker: "",
                 name: "",
@@ -83,8 +93,8 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                 noteContent: "",
             });
             setIncludeNote(false);
+            setSectorLoadError(null); // Clear error on close
         }
-        onOpenChange(open);
     }, [open, form]);
 
     // Handle the include note checkbox
@@ -93,22 +103,17 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
         form.setValue("includeNote", checked);
     };
 
-    const onSubmit = async (data: StockFormValues) => {
+    const onSubmit = async (data: StockWithNoteFormValues) => {
         setIsLoading(true);
         try {
-            // Extract stock data without note fields
-            const stockData = {
+            const result = await createStock({
                 ticker: data.ticker,
                 name: data.name,
                 sectorId: data.sectorId,
-            };
-            
-            const result = await createStock(data);
+            });
 
             if (result.success) {
-                // If including a note and stock created successfully
                 if (data.includeNote && data.noteContent && result.data) {
-                    // Create note linked to the stock
                     await createNote({
                         content: data.noteContent,
                         stockId: result.data.id,
@@ -197,14 +202,15 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                                     <Select
                                         onValueChange={field.onChange}
                                         value={field.value || "none"}
+                                        disabled={sectorLoadError !== null && sectors.length === 0} // Disable if loading failed and no sectors
                                     >
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select a sector" />
+                                                <SelectValue placeholder={sectorLoadError || "Select a sector"} />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="">None</SelectItem>
+                                            <SelectItem value="none">None</SelectItem>
                                             {sectors.map((sector) => (
                                                 <SelectItem key={sector.id} value={sector.id}>
                                                     {sector.name}
@@ -213,6 +219,11 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
+                                    {sectorLoadError && (
+                                        <FormMessage className="text-destructive">
+                                            {sectorLoadError}
+                                        </FormMessage>
+                                    )}
                                 </FormItem>
                             )}
                         />
@@ -272,7 +283,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={isLoading}>
+                            <Button type="submit" disabled={isLoading || sectorLoadError !== null && sectors.length === 0}>
                                 {isLoading ? "Adding..." : "Add Stock"}
                             </Button>
                         </DialogFooter>
