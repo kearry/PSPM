@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,16 +27,18 @@ import {
     FileTextIcon,
     CurrencyIcon,
 } from "lucide-react";
-import { formatCurrency, formatDate, calculateTransactionTotal } from "@/lib/utils";
+import { formatCurrency, formatDate, calculateTransactionTotal, getCurrencySymbol } from "@/lib/utils";
 import { TransactionType } from "@/lib/constants";
 import EditTransactionForm from "@/components/transactions/edit-transaction-form";
 import DeleteTransactionDialog from "@/components/transactions/delete-transaction-dialog";
+import { getCurrentUser } from "@/actions/user";
 
 interface Transaction {
     id: string;
     type: string;
     quantity: number;
     price: number;
+    currency: string;
     exchangeRate?: number | null;
     fxFee?: number | null;
     date: Date;
@@ -44,6 +46,7 @@ interface Transaction {
         id: string;
         ticker: string;
         name: string;
+        currency: string;
         sector?: {
             id: string;
             name: string;
@@ -59,6 +62,7 @@ interface Stock {
     id: string;
     ticker: string;
     name: string;
+    currency: string;
     sector?: {
         id: string;
         name: string;
@@ -79,6 +83,31 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+    const [userDefaultCurrency, setUserDefaultCurrency] = useState<string>("GBP");
+    const [uniqueCurrencies, setUniqueCurrencies] = useState<string[]>([]);
+
+    // Get user's default currency
+    useEffect(() => {
+        const fetchUserCurrency = async () => {
+            try {
+                const user = await getCurrentUser();
+                setUserDefaultCurrency(user.defaultCurrency || "GBP");
+            } catch (error) {
+                console.error("Error fetching user currency:", error);
+            }
+        };
+
+        fetchUserCurrency();
+    }, []);
+
+    // Get unique currencies in transactions
+    useEffect(() => {
+        const currencies = new Set<string>();
+        transactions.forEach(t => {
+            currencies.add(t.currency || t.stock.currency || "USD");
+        });
+        setUniqueCurrencies(Array.from(currencies));
+    }, [transactions]);
 
     // Apply filters
     let filteredTransactions = [...transactions];
@@ -111,11 +140,7 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
     if (currencyFilter !== "all") {
         filteredTransactions = filteredTransactions.filter(
             (transaction) => {
-                if (currencyFilter === "foreign") {
-                    return !!transaction.exchangeRate && transaction.exchangeRate !== 1;
-                } else { // local
-                    return !transaction.exchangeRate || transaction.exchangeRate === 1;
-                }
+                return (transaction.currency || transaction.stock.currency) === currencyFilter;
             }
         );
     }
@@ -189,7 +214,7 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                         <SelectItem value="all">All Stocks</SelectItem>
                         {stocks.map((stock) => (
                             <SelectItem key={stock.id} value={stock.id}>
-                                {stock.ticker}: {stock.name}
+                                {stock.ticker}: {stock.name} ({getCurrencySymbol(stock.currency)})
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -210,8 +235,11 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Currencies</SelectItem>
-                        <SelectItem value="local">Local Currency</SelectItem>
-                        <SelectItem value="foreign">Foreign Currency</SelectItem>
+                        {uniqueCurrencies.map((currency) => (
+                            <SelectItem key={currency} value={currency}>
+                                {getCurrencySymbol(currency)} {currency}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
@@ -279,10 +307,10 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                     </th>
                                     <th
                                         className="text-center font-medium py-4 px-3 cursor-pointer hover:bg-muted/50"
-                                        onClick={() => handleSort("exchangeRate")}
+                                        onClick={() => handleSort("currency")}
                                     >
-                                        FX
-                                        {sortBy === "exchangeRate" && (
+                                        Currency
+                                        {sortBy === "currency" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
                                             </span>
@@ -315,7 +343,9 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                 ) : (
                                     transactionsWithTotal.map((transaction) => {
                                         const isBuy = transaction.type === TransactionType.BUY;
-                                        const isForeignCurrency = !!transaction.exchangeRate && transaction.exchangeRate !== 1;
+                                        const transactionCurrency = transaction.currency || transaction.stock.currency || "USD";
+                                        const isForeignCurrency = transactionCurrency !== userDefaultCurrency;
+                                        const currencySymbol = getCurrencySymbol(transactionCurrency);
 
                                         return (
                                             <tr key={transaction.id} className="hover:bg-muted/50">
@@ -354,20 +384,20 @@ export default function TransactionsTable({ transactions, stocks }: Transactions
                                                     {transaction.quantity.toFixed(2)}
                                                 </td>
                                                 <td className="py-4 px-6 text-right">
-                                                    {formatCurrency(transaction.price)}
+                                                    {currencySymbol}{transaction.price.toFixed(2)}
                                                 </td>
                                                 <td className="py-4 px-3 text-center">
-                                                    {isForeignCurrency ? (
-                                                        <div className="flex flex-col items-center">
-                                                            <CurrencyIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                                            <span className="text-xs">
-                                                                {transaction.exchangeRate?.toFixed(4)}
-                                                            </span>
-                                                        </div>
-                                                    ) : null}
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-xs font-medium">
+                                                            {transactionCurrency}
+                                                        </span>
+                                                        {isForeignCurrency && (
+                                                            <CurrencyIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-1" />
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="py-4 px-6 text-right font-medium">
-                                                    {formatCurrency(transaction.total)}
+                                                    {formatCurrency(transaction.total, userDefaultCurrency)}
                                                 </td>
                                                 <td className="py-4 px-6 text-center">
                                                     {transaction.notes && transaction.notes.length > 0 ? (

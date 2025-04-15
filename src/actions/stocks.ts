@@ -101,13 +101,14 @@ export async function createStock(data: StockFormValues) {
         // Handle "none" value for sectorId
         const sectorId = data.sectorId === "none" ? null : data.sectorId;
 
-        // Create the stock
+        // Create the stock with currency
         const stock = await prisma.stock.create({
             data: {
                 ticker: data.ticker.toUpperCase(),
                 name: data.name,
                 sectorId: sectorId || null,
                 userId: user.id,
+                currency: data.currency || "USD", // Default to USD if not provided
             },
         });
 
@@ -120,6 +121,7 @@ export async function createStock(data: StockFormValues) {
             payload: {
                 ticker: stock.ticker,
                 name: stock.name,
+                currency: stock.currency,
             },
         });
 
@@ -176,6 +178,7 @@ export async function updateStock(id: string, data: StockFormValues) {
                 ticker: data.ticker.toUpperCase(),
                 name: data.name,
                 sectorId: sectorId || null,
+                currency: data.currency || stock.currency, // Keep existing currency if not provided
             },
         });
 
@@ -188,6 +191,7 @@ export async function updateStock(id: string, data: StockFormValues) {
             payload: {
                 ticker: updatedStock.ticker,
                 name: updatedStock.name,
+                currency: updatedStock.currency,
             },
         });
 
@@ -254,6 +258,7 @@ export async function deleteStock(id: string) {
             userId: user.id,
             payload: {
                 ticker: stock.ticker,
+                currency: stock.currency,
             },
         });
 

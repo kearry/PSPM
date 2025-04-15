@@ -33,6 +33,7 @@ export async function updateUserProfile(data: UserProfileFormValues) {
             data: {
                 name: data.name,
                 email: data.email,
+                defaultCurrency: data.defaultCurrency,
             },
         });
 

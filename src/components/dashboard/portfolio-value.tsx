@@ -1,15 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/utils";
 import { Landmark } from "lucide-react";
 
 interface PortfolioValueProps {
     portfolioValue: number;
     stocksCount: number;
+    currency: string;
 }
 
 export default function PortfolioValue({
     portfolioValue,
     stocksCount,
+    currency,
 }: PortfolioValueProps) {
     return (
         <Card>
@@ -18,9 +20,10 @@ export default function PortfolioValue({
                 <Landmark className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(portfolioValue)}</div>
+                <div className="text-2xl font-bold">{formatCurrency(portfolioValue, currency)}</div>
                 <p className="text-xs text-muted-foreground">
                     {stocksCount} {stocksCount === 1 ? "stock" : "stocks"} in portfolio
+                    <span className="ml-1">({getCurrencySymbol(currency)} {currency})</span>
                 </p>
             </CardContent>
         </Card>

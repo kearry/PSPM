@@ -1,11 +1,16 @@
 import { z } from "zod";
 import { TransactionType, TransactionTypeValue } from "./constants";
 
+// Currency validation
+const currencyEnum = z.enum(["GBP", "USD", "EUR", "JPY", "CHF", "CAD", "AUD"]);
+export type Currency = z.infer<typeof currencyEnum>;
+
 // Stock validation schema
 export const stockSchema = z.object({
     ticker: z.string().min(1, "Ticker is required").max(10, "Ticker must be 10 characters or less").toUpperCase(),
     name: z.string().min(1, "Company name is required").max(100, "Company name must be 100 characters or less"),
     sectorId: z.string().optional(),
+    currency: currencyEnum.default("USD"),
 });
 
 // Stock with note validation schema
@@ -30,6 +35,7 @@ export const transactionSchema = z.object({
     }),
     quantity: z.number().positive("Quantity must be positive"),
     price: z.number().positive("Price must be positive"),
+    currency: currencyEnum.default("USD"),
     exchangeRate: z.number().positive("Exchange rate must be positive").optional(),
     fxFee: z.number().min(0, "FX fee must be non-negative").optional(),
     date: z.date({
@@ -73,6 +79,7 @@ export type SectorFormValues = z.infer<typeof sectorSchema>;
 export const userProfileSchema = z.object({
     name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
     email: z.string().email("Invalid email address"),
+    defaultCurrency: currencyEnum.default("GBP"),
 });
 
 export type StockWithNoteFormValues = z.infer<typeof stockWithNoteSchema>;

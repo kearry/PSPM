@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTransactionById } from "@/actions/transactions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate, calculateTransactionTotal } from "@/lib/utils";
+import { formatCurrency, formatDate, calculateTransactionTotal, getCurrencySymbol } from "@/lib/utils";
 import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon } from "lucide-react";
 import { TransactionType } from "@/lib/constants";
 import TransactionActions from "@/components/transactions/transaction-actions";
 import TransactionNotes from "@/components/transactions/transaction-notes";
+import { getCurrentUser } from "@/actions/user";
 
 interface TransactionPageProps {
     params: {
@@ -32,6 +33,8 @@ export async function generateMetadata({ params }: TransactionPageProps): Promis
 
 export default async function TransactionPage({ params }: TransactionPageProps) {
     const { success, data: transaction, error } = await getTransactionById(params.id);
+    const user = await getCurrentUser();
+    const userCurrency = user.defaultCurrency || "GBP";
 
     if (!success || !transaction) {
         notFound();
@@ -39,7 +42,8 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
 
     const isBuy = transaction.type === TransactionType.BUY;
     const total = calculateTransactionTotal(transaction);
-    const isForeignCurrency = transaction.exchangeRate !== null && transaction.exchangeRate !== 1;
+    const isForeignCurrency = transaction.currency !== userCurrency;
+    const stockCurrency = transaction.currency || transaction.stock.currency || "USD";
 
     return (
         <div className="space-y-6">
@@ -100,21 +104,33 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
                         <div>
                             <div className="text-sm font-medium text-muted-foreground">Price</div>
                             <div className="text-lg font-medium">
-                                {formatCurrency(transaction.price)}
+                                {formatCurrency(transaction.price, stockCurrency)}
                             </div>
                         </div>
                         <div>
                             <div className="text-sm font-medium text-muted-foreground">Total</div>
                             <div className="text-lg font-medium">
-                                {formatCurrency(total)}
+                                {formatCurrency(total, userCurrency)}
                             </div>
                         </div>
                     </div>
 
                     {isForeignCurrency && (
                         <div className="mt-4 pt-4 border-t">
-                            <h3 className="font-medium mb-2">Foreign Currency Details</h3>
+                            <h3 className="font-medium mb-2">Currency Details</h3>
                             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">Transaction Currency</div>
+                                    <div className="text-lg font-medium">
+                                        {getCurrencySymbol(stockCurrency)} {stockCurrency}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">Base Currency</div>
+                                    <div className="text-lg font-medium">
+                                        {getCurrencySymbol(userCurrency)} {userCurrency}
+                                    </div>
+                                </div>
                                 <div>
                                     <div className="text-sm font-medium text-muted-foreground">Exchange Rate</div>
                                     <div className="text-lg font-medium">
@@ -124,17 +140,17 @@ export default async function TransactionPage({ params }: TransactionPageProps) 
                                 <div>
                                     <div className="text-sm font-medium text-muted-foreground">FX Fee</div>
                                     <div className="text-lg font-medium">
-                                        {transaction.fxFee ? formatCurrency(transaction.fxFee) : "$0.00"}
+                                        {transaction.fxFee ? formatCurrency(transaction.fxFee, userCurrency) : `${getCurrencySymbol(userCurrency)}0.00`}
                                     </div>
                                 </div>
-                                <div className="col-span-2">
+                                <div className="col-span-full">
                                     <div className="text-sm font-medium text-muted-foreground">Calculation</div>
                                     <div className="text-sm text-muted-foreground">
-                                        {transaction.quantity.toFixed(2)} × {formatCurrency(transaction.price)} ×{" "}
+                                        {transaction.quantity.toFixed(2)} × {formatCurrency(transaction.price, stockCurrency)} ×{" "}
                                         {transaction.exchangeRate?.toFixed(4)} {transaction.fxFee ?
-                                            (isBuy ? " + " : " - ") + formatCurrency(transaction.fxFee || 0) + " fee" :
+                                            (isBuy ? " + " : " - ") + formatCurrency(transaction.fxFee || 0, userCurrency) + " fee" :
                                             ""}
-                                        {" = "}{formatCurrency(total)}
+                                        {" = "}{formatCurrency(total, userCurrency)}
                                     </div>
                                 </div>
                             </div>

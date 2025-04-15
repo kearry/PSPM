@@ -35,6 +35,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { getCurrencySymbol } from "@/lib/utils";
+import { getCurrentUser } from "@/actions/user";
 
 interface AddStockFormProps {
     open: boolean;
@@ -47,6 +49,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
     const [sectors, setSectors] = useState<{ id: string; name: string }[]>([]);
     const [includeNote, setIncludeNote] = useState(false);
     const [sectorLoadError, setSectorLoadError] = useState<string | null>(null); // State for sector loading errors
+    const [userDefaultCurrency, setUserDefaultCurrency] = useState<string>("GBP");
 
     const form = useForm<StockWithNoteFormValues>({
         resolver: zodResolver(stockWithNoteSchema),
@@ -54,10 +57,27 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
             ticker: "",
             name: "",
             sectorId: "none",
+            currency: "USD", // Default to USD for stocks
             includeNote: false,
             noteContent: "",
         },
     });
+
+    // Get user's default currency
+    useEffect(() => {
+        const fetchUserCurrency = async () => {
+            try {
+                const user = await getCurrentUser();
+                setUserDefaultCurrency(user.defaultCurrency || "GBP");
+            } catch (error) {
+                console.error("Error fetching user currency:", error);
+            }
+        };
+
+        if (open) {
+            fetchUserCurrency();
+        }
+    }, [open]);
 
     // Load sectors when dialog opens
     useEffect(() => {
@@ -89,6 +109,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                 ticker: "",
                 name: "",
                 sectorId: "none",
+                currency: "USD", // Default to USD for stocks
                 includeNote: false,
                 noteContent: "",
             });
@@ -110,6 +131,7 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                 ticker: data.ticker,
                 name: data.name,
                 sectorId: data.sectorId,
+                currency: data.currency,
             });
 
             if (result.success) {
@@ -120,14 +142,16 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                     });
                 }
 
+                const currencySymbol = getCurrencySymbol(data.currency);
                 toast({
                     title: "Stock added",
-                    description: `${data.ticker} has been added to your portfolio.`,
+                    description: `${data.ticker} has been added to your portfolio (${currencySymbol} ${data.currency}).`,
                 });
                 form.reset({
                     ticker: "",
                     name: "",
                     sectorId: "none",
+                    currency: "USD",
                     includeNote: false,
                     noteContent: "",
                 });
@@ -189,6 +213,41 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                                     <FormControl>
                                         <Input placeholder="Apple Inc." {...field} />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="currency"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Currency</FormLabel>
+                                    <Select
+                                        onValueChange={field.onChange}
+                                        defaultValue={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select a currency" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="USD">{getCurrencySymbol("USD")} USD - US Dollar</SelectItem>
+                                            <SelectItem value="GBP">{getCurrencySymbol("GBP")} GBP - British Pound</SelectItem>
+                                            <SelectItem value="EUR">{getCurrencySymbol("EUR")} EUR - Euro</SelectItem>
+                                            <SelectItem value="JPY">{getCurrencySymbol("JPY")} JPY - Japanese Yen</SelectItem>
+                                            <SelectItem value="CHF">{getCurrencySymbol("CHF")} CHF - Swiss Franc</SelectItem>
+                                            <SelectItem value="CAD">{getCurrencySymbol("CAD")} CAD - Canadian Dollar</SelectItem>
+                                            <SelectItem value="AUD">{getCurrencySymbol("AUD")} AUD - Australian Dollar</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormDescription>
+                                        {field.value !== userDefaultCurrency ?
+                                            `This differs from your default currency (${getCurrencySymbol(userDefaultCurrency)} ${userDefaultCurrency}). Exchange rates will be needed for transactions.` :
+                                            `This matches your default currency (${getCurrencySymbol(userDefaultCurrency)} ${userDefaultCurrency}).`
+                                        }
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

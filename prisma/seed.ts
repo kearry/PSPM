@@ -12,10 +12,13 @@ async function main() {
     // Create user if not exists
     const user = await prisma.user.upsert({
         where: { email: defaultUserEmail },
-        update: {},
+        update: {
+            defaultCurrency: 'GBP', // Update with default currency
+        },
         create: {
             name: defaultUserName,
             email: defaultUserEmail,
+            defaultCurrency: 'GBP', // Set default currency
         },
     });
 
@@ -52,29 +55,42 @@ async function main() {
             name: 'Apple Inc.',
             sectorId: techSector.id,
             userId: user.id,
+            currency: 'USD', // Set currency for stock
         },
         {
             ticker: 'MSFT',
             name: 'Microsoft Corporation',
             sectorId: techSector.id,
             userId: user.id,
+            currency: 'USD', // Set currency for stock
         },
         {
             ticker: 'JPM',
             name: 'JPMorgan Chase & Co.',
             sectorId: financeSector.id,
             userId: user.id,
+            currency: 'USD', // Set currency for stock
+        },
+        {
+            ticker: 'BARC',
+            name: 'Barclays PLC',
+            sectorId: financeSector.id,
+            userId: user.id,
+            currency: 'GBP', // Set a GBP stock as example
         },
     ].map(async (stock) => {
         return await prisma.stock.upsert({
             where: {
                 id: `${stock.userId}-${stock.ticker}`, // This will fail, but we'll catch it
             },
-            update: {},
+            update: {
+                currency: stock.currency, // Update currency if stock exists
+            },
             create: stock,
             select: {
                 id: true,
                 ticker: true,
+                currency: true,
             },
         }).catch(() => {
             // If the upsert fails (since we don't have a compound unique constraint),
@@ -84,6 +100,7 @@ async function main() {
                 select: {
                     id: true,
                     ticker: true,
+                    currency: true,
                 },
             });
         });
@@ -94,8 +111,11 @@ async function main() {
     // Create sample transactions
     const today = new Date();
 
-    // Regular local currency transactions
+    // Regular transactions with various currencies
     for (const stock of stocks) {
+        // Determine the currency for this stock's transactions
+        const stockCurrency = stock.currency;
+
         // Create a BUY transaction
         await prisma.transaction.create({
             data: {
@@ -104,9 +124,11 @@ async function main() {
                 type: TransactionType.BUY,
                 quantity: 10,
                 price: stock.ticker === 'AAPL' ? 175.5 :
-                    stock.ticker === 'MSFT' ? 340.2 : 150.75,
-                exchangeRate: 1.0, // Local currency
-                fxFee: 0.0,       // No FX fee
+                    stock.ticker === 'MSFT' ? 340.2 :
+                        stock.ticker === 'BARC' ? 150.75 : 150.75,
+                currency: stockCurrency, // Use the stock's currency
+                exchangeRate: stockCurrency === 'GBP' ? 1.0 : 1.25, // Exchange rate from USD to GBP if needed
+                fxFee: stockCurrency === 'GBP' ? 0.0 : 5.0, // FX fee for foreign currency
                 date: subDays(today, Math.floor(Math.random() * 30)),
             }
         });
@@ -119,49 +141,34 @@ async function main() {
                 type: TransactionType.BUY,
                 quantity: 5,
                 price: stock.ticker === 'AAPL' ? 180.25 :
-                    stock.ticker === 'MSFT' ? 345.8 : 155.3,
-                exchangeRate: 1.0, // Local currency
-                fxFee: 0.0,       // No FX fee
+                    stock.ticker === 'MSFT' ? 345.8 :
+                        stock.ticker === 'BARC' ? 155.3 : 155.3,
+                currency: stockCurrency, // Use the stock's currency
+                exchangeRate: stockCurrency === 'GBP' ? 1.0 : 1.27, // Exchange rate from USD to GBP if needed
+                fxFee: stockCurrency === 'GBP' ? 0.0 : 4.5, // FX fee for foreign currency
                 date: subDays(today, Math.floor(Math.random() * 20)),
             }
         });
 
-        // Create a SELL transaction for AAPL only
-        if (stock.ticker === 'AAPL') {
+        // Create a SELL transaction for AAPL and BARC only
+        if (stock.ticker === 'AAPL' || stock.ticker === 'BARC') {
             await prisma.transaction.create({
                 data: {
                     stockId: stock.id,
                     userId: user.id,
                     type: TransactionType.SELL,
                     quantity: 3,
-                    price: 190.5,
-                    exchangeRate: 1.0, // Local currency
-                    fxFee: 0.0,       // No FX fee
+                    price: stock.ticker === 'AAPL' ? 190.5 : 165.25,
+                    currency: stockCurrency, // Use the stock's currency
+                    exchangeRate: stockCurrency === 'GBP' ? 1.0 : 1.26, // Exchange rate from USD to GBP if needed
+                    fxFee: stockCurrency === 'GBP' ? 0.0 : 4.75, // FX fee for foreign currency
                     date: subDays(today, Math.floor(Math.random() * 10)),
                 }
             });
         }
     }
 
-    // Add some foreign currency transactions as examples
-    const msftStock = stocks.find(s => s.ticker === 'MSFT');
-    if (msftStock) {
-        // Add a EUR transaction for MSFT
-        await prisma.transaction.create({
-            data: {
-                stockId: msftStock.id,
-                userId: user.id,
-                type: TransactionType.BUY,
-                quantity: 8,
-                price: 320.75, // Price in EUR
-                exchangeRate: 1.10, // Convert EUR to USD
-                fxFee: 12.50,     // FX fee in USD
-                date: subDays(today, 5),
-            }
-        });
-    }
-
-    console.log('Created sample transactions (including foreign currency examples)');
+    console.log('Created sample transactions with currency information');
 
     // Create sample notes
     await prisma.note.create({
@@ -180,11 +187,24 @@ async function main() {
         }
     });
 
+    // Add a note about currency considerations
+    const barcStock = stocks.find(s => s.ticker === 'BARC');
+    if (barcStock) {
+        await prisma.note.create({
+            data: {
+                content: 'UK stock with no currency conversion needed as it trades in GBP',
+                userId: user.id,
+                stockId: barcStock.id,
+            }
+        });
+    }
+
     // Add a note about foreign currency transaction
+    const msftStock = stocks.find(s => s.ticker === 'MSFT');
     if (msftStock) {
         await prisma.note.create({
             data: {
-                content: 'Purchased through European broker with EUR - watch exchange rates for future trades',
+                content: 'Need to monitor USD/GBP exchange rates for impact on returns',
                 userId: user.id,
                 stockId: msftStock.id,
             }
@@ -199,7 +219,7 @@ async function main() {
             action: 'CREATE_STOCK',
             entityType: 'Stock',
             entityId: stocks[0].id,
-            payload: JSON.stringify({ ticker: 'AAPL', name: 'Apple Inc.' }),
+            payload: JSON.stringify({ ticker: 'AAPL', name: 'Apple Inc.', currency: 'USD' }),
             userId: user.id,
         }
     });

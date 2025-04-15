@@ -18,6 +18,7 @@ model User {
   stocks       Stock[]
   transactions Transaction[]
   notes        Note[]
+  defaultCurrency String      @default("GBP") // Default currency for the user
 }
 
 model Stock {
@@ -31,6 +32,7 @@ model Stock {
   user         User           @relation(fields: [userId], references: [id])
   transactions Transaction[]
   notes        Note[]
+  currency     String         @default("USD") // Currency for the stock
 }
 
 model Transaction {
@@ -42,6 +44,7 @@ model Transaction {
   type         String         // 'BUY' or 'SELL' - replacing enum with string
   quantity     Float
   price        Float
+  currency     String         @default("USD") // Currency for the transaction price
   exchangeRate Float          // Exchange rate for foreign currency transactions (no longer optional)
   fxFee        Float          // Foreign exchange fee (no longer optional)
   date         DateTime

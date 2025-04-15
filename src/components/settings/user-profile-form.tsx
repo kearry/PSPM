@@ -22,13 +22,22 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getCurrencySymbol } from "@/lib/utils";
 
 interface User {
     id: string;
     name: string;
     email: string;
+    defaultCurrency: string;
 }
 
 interface UserProfileFormProps {
@@ -44,6 +53,7 @@ export default function UserProfileForm({ user }: UserProfileFormProps) {
         defaultValues: {
             name: user.name,
             email: user.email,
+            defaultCurrency: user.defaultCurrency || "GBP",
         },
     });
 
@@ -106,6 +116,35 @@ export default function UserProfileForm({ user }: UserProfileFormProps) {
                                     <FormControl>
                                         <Input placeholder="Your email" {...field} />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="defaultCurrency"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Default Currency</FormLabel>
+                                    <Select
+                                        onValueChange={field.onChange}
+                                        defaultValue={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select a currency" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="GBP">{getCurrencySymbol("GBP")} GBP - British Pound</SelectItem>
+                                            <SelectItem value="USD">{getCurrencySymbol("USD")} USD - US Dollar</SelectItem>
+                                            <SelectItem value="EUR">{getCurrencySymbol("EUR")} EUR - Euro</SelectItem>
+                                            <SelectItem value="JPY">{getCurrencySymbol("JPY")} JPY - Japanese Yen</SelectItem>
+                                            <SelectItem value="CHF">{getCurrencySymbol("CHF")} CHF - Swiss Franc</SelectItem>
+                                            <SelectItem value="CAD">{getCurrencySymbol("CAD")} CAD - Canadian Dollar</SelectItem>
+                                            <SelectItem value="AUD">{getCurrencySymbol("AUD")} AUD - Australian Dollar</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                     <FormMessage />
                                 </FormItem>
                             )}

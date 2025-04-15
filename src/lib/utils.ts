@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { TransactionType, TransactionTypeValue } from "./constants";
+import { TransactionType } from "./constants";
+import { Currency } from "./validators";
 
 /**
  * Combines class names with tailwind merge
@@ -10,12 +11,31 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Gets the currency symbol for a currency code
+ */
+export function getCurrencySymbol(currency: Currency | string = 'GBP'): string {
+    const symbols: { [key: string]: string } = {
+        'GBP': '£',
+        'USD': '$',
+        'EUR': '€',
+        'JPY': '¥',
+        'CHF': 'Fr',
+        'CAD': 'C$',
+        'AUD': 'A$',
+    };
+
+    return symbols[currency] || currency;
+}
+
+/**
  * Formats a number as currency
  */
-export function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+export function formatCurrency(amount: number, currency: Currency | string = 'GBP'): string {
+    const locale = currency === 'GBP' ? 'en-GB' : 'en-US';
+
+    return new Intl.NumberFormat(locale, {
         style: 'currency',
-        currency: 'USD',
+        currency: currency,
     }).format(amount);
 }
 
@@ -23,7 +43,7 @@ export function formatCurrency(amount: number): string {
  * Formats a date
  */
 export function formatDate(date: Date): string {
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat('en-GB', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -37,6 +57,7 @@ export function calculateTransactionTotal(transaction: {
     quantity: number;
     price: number;
     type: string;
+    currency?: string;
     exchangeRate?: number | null;
     fxFee?: number | null;
 }): number {
@@ -66,6 +87,7 @@ export function calculateAveragePrice(transactions: {
     type: string;
     quantity: number;
     price: number;
+    currency?: string;
     exchangeRate?: number | null;
 }[]): number {
     const buyTransactions = transactions.filter(

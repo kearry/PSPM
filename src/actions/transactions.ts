@@ -87,6 +87,12 @@ export async function createTransaction(data: TransactionFormValues) {
             return { success: false, error: "Stock not found" };
         }
 
+        // Get user's default currency
+        const userCurrency = user.defaultCurrency || "GBP";
+
+        // Determine if we need currency conversion
+        const needsConversion = data.currency !== userCurrency;
+
         // Create the transaction with required exchangeRate and fxFee
         const transaction = await prisma.transaction.create({
             data: {
@@ -95,8 +101,9 @@ export async function createTransaction(data: TransactionFormValues) {
                 type: data.type,
                 quantity: data.quantity,
                 price: data.price,
-                exchangeRate: data.exchangeRate || 1,
-                fxFee: data.fxFee || 0,
+                currency: data.currency || stock.currency, // Use stock currency if not specified
+                exchangeRate: needsConversion ? (data.exchangeRate || 1) : 1,
+                fxFee: needsConversion ? (data.fxFee || 0) : 0,
                 date: data.date,
             },
             include: {
@@ -115,6 +122,7 @@ export async function createTransaction(data: TransactionFormValues) {
                 type: transaction.type,
                 quantity: transaction.quantity,
                 price: transaction.price,
+                currency: transaction.currency,
                 exchangeRate: transaction.exchangeRate,
                 fxFee: transaction.fxFee,
             },
@@ -165,6 +173,12 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
             return { success: false, error: "Stock not found" };
         }
 
+        // Get user's default currency
+        const userCurrency = user.defaultCurrency || "GBP";
+
+        // Determine if we need currency conversion
+        const needsConversion = (data.currency || stock.currency) !== userCurrency;
+
         // Update the transaction - using direct update because our fields match the schema
         const updatedTransaction = await prisma.transaction.update({
             where: { id },
@@ -176,8 +190,9 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
                 // Only update stockId if it has changed
                 ...(transaction.stockId !== data.stockId ? { stockId: data.stockId } : {}),
                 // Always include these fields
-                exchangeRate: data.exchangeRate || 1,
-                fxFee: data.fxFee || 0,
+                currency: data.currency || transaction.currency,
+                exchangeRate: needsConversion ? (data.exchangeRate || 1) : 1,
+                fxFee: needsConversion ? (data.fxFee || 0) : 0,
             },
             include: {
                 stock: true,
@@ -195,6 +210,7 @@ export async function updateTransaction(id: string, data: TransactionFormValues)
                 type: updatedTransaction.type,
                 quantity: updatedTransaction.quantity,
                 price: updatedTransaction.price,
+                currency: updatedTransaction.currency,
                 exchangeRate: updatedTransaction.exchangeRate,
                 fxFee: updatedTransaction.fxFee,
             },
@@ -261,6 +277,7 @@ export async function deleteTransaction(id: string) {
             payload: {
                 stockTicker: transaction.stock.ticker,
                 type: transaction.type,
+                currency: transaction.currency,
             },
         });
 
@@ -308,6 +325,7 @@ export async function exportTransactionsToCSV() {
             Type: transaction.type,
             Quantity: transaction.quantity,
             Price: transaction.price,
+            Currency: transaction.currency,
             ExchangeRate: transaction.exchangeRate || 1,
             FXFee: transaction.fxFee || 0,
             Total: (transaction.price * transaction.quantity * (transaction.exchangeRate || 1)) +

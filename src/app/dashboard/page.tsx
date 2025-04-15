@@ -23,6 +23,7 @@ export default async function DashboardPage() {
 
     const stocks = stocksResponse.success ? stocksResponse.data ?? [] : [];
     const transactions = transactionsResponse.success ? transactionsResponse.data ?? [] : [];
+    const userCurrency = userResponse.defaultCurrency || "GBP";
 
     // Calculate portfolio summary
     const stocksWithDetails = stocks.map((stock) => {
@@ -81,20 +82,31 @@ export default async function DashboardPage() {
             <DashboardHeader
                 username={userResponse.name}
                 portfolioValue={portfolioValue}
+                currency={userCurrency}
             />
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <PortfolioValue
                     portfolioValue={portfolioValue}
                     stocksCount={stocksWithHoldings.length}
+                    currency={userCurrency}
                 />
 
-                <SectorBreakdown sectors={sectorBreakdown} />
+                <SectorBreakdown
+                    sectors={sectorBreakdown}
+                    currency={userCurrency}
+                />
 
-                <RecentTransactions transactions={recentTransactions} />
+                <RecentTransactions
+                    transactions={recentTransactions}
+                    userCurrency={userCurrency}
+                />
             </div>
 
-            <StockSummary stocks={stocksWithHoldings} />
+            <StockSummary
+                stocks={stocksWithHoldings}
+                userCurrency={userCurrency}
+            />
         </div>
     );
 }
