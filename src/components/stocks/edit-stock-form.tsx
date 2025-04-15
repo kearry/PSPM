@@ -68,19 +68,28 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
 
     // Load sectors when dialog opens
     const handleOpenChange = async (open: boolean) => {
-        onOpenChange(open);
-
-        if (open) {
-            // Reset includeNote state when opening the form
-            setIncludeNote(false);
-
-            if (sectors.length === 0) {
+        // First, load sectors if they're not already loaded
+        if (open && sectors.length === 0) {
+            setIsLoading(true);
+            try {
                 const { success, data } = await getSectors();
                 if (success && data) {
                     setSectors(data);
                 }
+            } catch (error) {
+                console.error("Error loading sectors:", error);
+            } finally {
+                setIsLoading(false);
             }
         }
+
+        // Reset includeNote state when opening the form
+        if (open) {
+            setIncludeNote(false);
+        }
+
+        // Update the open state
+        onOpenChange(open);
     };
 
     // Update form values when stock changes

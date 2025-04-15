@@ -60,7 +60,20 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
 
     // Load sectors when dialog opens
     const handleOpenChange = async (open: boolean) => {
-        onOpenChange(open);
+        // First, load sectors if they're not already loaded
+        if (open && sectors.length === 0) {
+            setIsLoading(true);
+            try {
+                const { success, data } = await getSectors();
+                if (success && data) {
+                    setSectors(data);
+                }
+            } catch (error) {
+                console.error("Error loading sectors:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
 
         // Reset form when opening to ensure default values are used
         if (open) {
@@ -72,14 +85,10 @@ export default function AddStockForm({ open, onOpenChange }: AddStockFormProps) 
                 noteContent: "",
             });
             setIncludeNote(false);
-
-            if (sectors.length === 0) {
-                const { success, data } = await getSectors();
-                if (success && data) {
-                    setSectors(data);
-                }
-            }
         }
+
+        // Update the open state
+        onOpenChange(open);
     };
 
     // Handle the include note checkbox
