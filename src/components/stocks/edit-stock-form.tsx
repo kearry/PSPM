@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { StockWithNoteFormValues, stockWithNoteSchema } from "@/lib/validators";
+import { StockWithNoteFormValues, stockWithNoteSchema, Currency } from "@/lib/validators";
 import { updateStock, getSectors } from "@/actions/stocks";
 import { createNote, getNotesByStockId } from "@/actions/notes";
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,7 @@ interface Stock {
     ticker: string;
     name: string;
     sectorId: string | null;
-    currency: string;
+    currency: Currency;
     notes?: {
         id: string;
         content: string;
@@ -65,7 +65,7 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
     const [existingNotes, setExistingNotes] = useState<{ id: string; content: string }[]>([]);
     const [loadingNotes, setLoadingNotes] = useState(false);
     const [notesLoadError, setNotesLoadError] = useState<string | null>(null);
-    const [userDefaultCurrency, setUserDefaultCurrency] = useState<string>("GBP");
+    const [userDefaultCurrency, setUserDefaultCurrency] = useState<Currency>("GBP");
 
     const form = useForm<StockWithNoteFormValues>({
         resolver: zodResolver(stockWithNoteSchema),
@@ -84,7 +84,8 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
         const fetchUserCurrency = async () => {
             try {
                 const user = await getCurrentUser();
-                setUserDefaultCurrency(user.defaultCurrency || "GBP");
+                // Cast to Currency to ensure it's one of the allowed values
+                setUserDefaultCurrency((user.defaultCurrency || "GBP") as Currency);
             } catch (error) {
                 console.error("Error fetching user currency:", error);
             }
@@ -345,7 +346,7 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
                                     <Select
                                         onValueChange={(value) => field.onChange(value)}
                                         value={field.value || "none"}
-                                        disabled={isLoading || sectorLoadError !== null && sectors.length === 0}
+                                        disabled={isLoading || (sectorLoadError !== null && sectors.length === 0)}
                                     >
                                         <FormControl>
                                             <SelectTrigger>

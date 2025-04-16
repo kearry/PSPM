@@ -42,6 +42,7 @@ import { cn, formatCurrency, getCurrencySymbol } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getCurrentUser } from "@/actions/user";
+import { Currency } from "@/lib/validators";
 
 interface Transaction {
     id: string;
@@ -86,8 +87,10 @@ export default function EditTransactionForm({
     const [isForeignCurrency, setIsForeignCurrency] = useState(
         !!transaction.exchangeRate && transaction.exchangeRate !== 1
     );
-    const [userDefaultCurrency, setUserDefaultCurrency] = useState<string>("GBP");
-    const [selectedStockCurrency, setSelectedStockCurrency] = useState<string>(transaction.stock.currency || "USD");
+    const [userDefaultCurrency, setUserDefaultCurrency] = useState<Currency>("GBP");
+    const [selectedStockCurrency, setSelectedStockCurrency] = useState<Currency>(
+        (transaction.stock.currency || "USD") as Currency
+    );
 
     const form = useForm<TransactionWithNoteFormValues>({
         resolver: zodResolver(transactionWithNoteSchema),
@@ -96,7 +99,7 @@ export default function EditTransactionForm({
             type: transaction.type as TransactionTypeValue,
             quantity: transaction.quantity,
             price: transaction.price,
-            currency: transaction.currency || transaction.stock.currency,
+            currency: (transaction.currency || transaction.stock.currency || "USD") as Currency,
             exchangeRate: transaction.exchangeRate || 1,
             fxFee: transaction.fxFee || 0,
             date: new Date(transaction.date),
@@ -110,7 +113,7 @@ export default function EditTransactionForm({
         const fetchUserCurrency = async () => {
             try {
                 const user = await getCurrentUser();
-                setUserDefaultCurrency(user.defaultCurrency || "GBP");
+                setUserDefaultCurrency((user.defaultCurrency || "GBP") as Currency);
             } catch (error) {
                 console.error("Error fetching user currency:", error);
             }
@@ -128,7 +131,7 @@ export default function EditTransactionForm({
             type: transaction.type as TransactionTypeValue,
             quantity: transaction.quantity,
             price: transaction.price,
-            currency: transaction.currency || transaction.stock.currency,
+            currency: (transaction.currency || transaction.stock.currency || "USD") as Currency,
             exchangeRate: transaction.exchangeRate || 1,
             fxFee: transaction.fxFee || 0,
             date: new Date(transaction.date),
@@ -137,7 +140,7 @@ export default function EditTransactionForm({
         });
 
         // Update stock currency
-        setSelectedStockCurrency(transaction.stock.currency);
+        setSelectedStockCurrency(transaction.stock.currency as Currency);
 
         // Check if this was a foreign currency transaction
         const needsConversion = transaction.currency !== userDefaultCurrency;
@@ -151,8 +154,8 @@ export default function EditTransactionForm({
         if (stockId && stockId !== transaction.stock.id) {
             const selectedStock = stocks.find(s => s.id === stockId);
             if (selectedStock) {
-                setSelectedStockCurrency(selectedStock.currency);
-                form.setValue("currency", selectedStock.currency);
+                setSelectedStockCurrency(selectedStock.currency as Currency);
+                form.setValue("currency", selectedStock.currency as Currency);
 
                 // Check if currency conversion is needed
                 const needsConversion = selectedStock.currency !== userDefaultCurrency;
@@ -164,7 +167,7 @@ export default function EditTransactionForm({
                 }
             }
         }
-    }, [form.getValues().stockId, stocks, transaction.stock.id, form, userDefaultCurrency]);
+    }, [form.watch("stockId"), stocks, transaction.stock.id, form, userDefaultCurrency]);
 
     // Handle the include note checkbox
     const handleIncludeNoteChange = (checked: boolean) => {
@@ -266,9 +269,9 @@ export default function EditTransactionForm({
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="stockId"
                             render={({ field }) => (
                                 <FormItem>
@@ -279,8 +282,8 @@ export default function EditTransactionForm({
                                             // Update currency when stock changes
                                             const selectedStock = stocks.find(s => s.id === value);
                                             if (selectedStock) {
-                                                setSelectedStockCurrency(selectedStock.currency);
-                                                form.setValue("currency", selectedStock.currency);
+                                                setSelectedStockCurrency(selectedStock.currency as Currency);
+                                                form.setValue("currency", selectedStock.currency as Currency);
 
                                                 // Check if currency conversion is needed
                                                 const needsConversion = selectedStock.currency !== userDefaultCurrency;
@@ -302,7 +305,7 @@ export default function EditTransactionForm({
                                         <SelectContent>
                                             {stocks.map((stock) => (
                                                 <SelectItem key={stock.id} value={stock.id}>
-                                                    {stock.ticker}: {stock.name} ({getCurrencySymbol(stock.currency)})
+                                                    {stock.ticker}: {stock.name} ({getCurrencySymbol(stock.currency as Currency)})
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -313,7 +316,7 @@ export default function EditTransactionForm({
                         />
 
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="type"
                             render={({ field }) => (
                                 <FormItem>
@@ -338,7 +341,7 @@ export default function EditTransactionForm({
                         />
 
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="quantity"
                             render={({ field }) => (
                                 <FormItem>
@@ -358,7 +361,7 @@ export default function EditTransactionForm({
                         />
 
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="price"
                             render={({ field }) => (
                                 <FormItem>
@@ -404,7 +407,7 @@ export default function EditTransactionForm({
                         {/* Exchange Rate - only shown when foreign currency is enabled */}
                         {isForeignCurrency && (
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="exchangeRate"
                                 render={({ field }) => (
                                     <FormItem>
@@ -431,7 +434,7 @@ export default function EditTransactionForm({
                         {/* FX Fee - only shown when foreign currency is enabled */}
                         {isForeignCurrency && (
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="fxFee"
                                 render={({ field }) => (
                                     <FormItem>
@@ -476,7 +479,7 @@ export default function EditTransactionForm({
                         )}
 
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="date"
                             render={({ field }) => (
                                 <FormItem className="flex flex-col">
@@ -515,7 +518,7 @@ export default function EditTransactionForm({
                         />
 
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="includeNote"
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
@@ -542,7 +545,7 @@ export default function EditTransactionForm({
 
                         {includeNote && (
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="noteContent"
                                 render={({ field }) => (
                                     <FormItem>

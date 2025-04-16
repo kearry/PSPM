@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { StockWithNoteFormValues, stockWithNoteSchema } from "@/lib/validators";
-import { updateStock, getSectors } from "@/actions/stocks";
-import { createNote, getNotesByStockId } from "@/actions/notes";
+import { TransactionWithNoteFormValues, transactionWithNoteSchema } from "@/lib/validators";
+import { createTransaction } from "@/actions/transactions";
+import { getStocks } from "@/actions/stocks";
 import { useToast } from "@/hooks/use-toast";
 import {
     Dialog,
@@ -33,47 +33,54 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn, formatCurrency, getCurrencySymbol } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getCurrencySymbol } from "@/lib/utils";
+import { TransactionType, TransactionTypeValue } from "@/lib/constants";
 import { getCurrentUser } from "@/actions/user";
+import { Currency } from "@/lib/validators";
 
 interface Stock {
     id: string;
     ticker: string;
     name: string;
-    sectorId: string | null;
     currency: string;
-    notes?: {
-        id: string;
-        content: string;
-    }[];
 }
 
-interface EditStockFormProps {
-    stock: Stock;
+interface AddTransactionFormProps {
+    stock?: Stock;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
-export default function EditStockForm({ stock, open, onOpenChange }: EditStockFormProps) {
+export default function AddTransactionForm({
+    stock,
+    open,
+    onOpenChange,
+}: AddTransactionFormProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const [sectors, setSectors] = useState<{ id: string; name: string }[]>([]);
-    const [includeNewNote, setIncludeNewNote] = useState(false);
-    const [sectorLoadError, setSectorLoadError] = useState<string | null>(null);
-    const [existingNotes, setExistingNotes] = useState<{ id: string; content: string }[]>([]);
-    const [loadingNotes, setLoadingNotes] = useState(false);
-    const [notesLoadError, setNotesLoadError] = useState<string | null>(null);
-    const [userDefaultCurrency, setUserDefaultCurrency] = useState<string>("GBP");
+    const [stocks, setStocks] = useState<Stock[]>([]);
+    const [includeNote, setIncludeNote] = useState(false);
+    const [isForeignCurrency, setIsForeignCurrency] = useState(false);
+    const [userDefaultCurrency, setUserDefaultCurrency] = useState<Currency>("GBP");
+    const [selectedStockCurrency, setSelectedStockCurrency] = useState<Currency>(stock?.currency as Currency || "USD");
 
-    const form = useForm<StockWithNoteFormValues>({
-        resolver: zodResolver(stockWithNoteSchema),
+    const form = useForm<TransactionWithNoteFormValues>({
+        resolver: zodResolver(transactionWithNoteSchema),
         defaultValues: {
-            ticker: stock.ticker,
-            name: stock.name,
-            sectorId: stock.sectorId || "none",
-            currency: stock.currency || "USD",
+            stockId: stock?.id || "",
+            type: TransactionType.BUY,
+            quantity: 0,
+            price: 0,
+            currency: selectedStockCurrency,
+            exchangeRate: 1,
+            fxFee: 0,
+            date: new Date(),
             includeNote: false,
             noteContent: "",
         },
@@ -84,7 +91,7 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
         const fetchUserCurrency = async () => {
             try {
                 const user = await getCurrentUser();
-                setUserDefaultCurrency(user.defaultCurrency || "GBP");
+                setUserDefaultCurrency(user.defaultCurrency as Currency || "GBP");
             } catch (error) {
                 console.error("Error fetching user currency:", error);
             }
@@ -95,136 +102,134 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
         }
     }, [open]);
 
-    // Load sectors when dialog opens
+    // Reset form when dialog closes
     useEffect(() => {
-        const loadSectors = async () => {
-            if (open && sectors.length === 0) {
-                setIsLoading(true);
+        if (!open) {
+            form.reset({
+                stockId: stock?.id || "",
+                type: TransactionType.BUY,
+                quantity: 0,
+                price: 0,
+                currency: selectedStockCurrency,
+                exchangeRate: 1,
+                fxFee: 0,
+                date: new Date(),
+                includeNote: false,
+                noteContent: "",
+            });
+            setIncludeNote(false);
+        }
+    }, [open, form, stock, selectedStockCurrency]);
+
+    // Load stocks when dialog opens
+    useEffect(() => {
+        const loadStocks = async () => {
+            if (open && !stock) {
                 try {
-                    const { success, data, error } = await getSectors();
+                    const { success, data } = await getStocks();
                     if (success && data) {
-                        setSectors(data);
-                        setSectorLoadError(null);
+                        setStocks(data);
                     } else {
-                        console.error("Error loading sectors:", error);
-                        setSectorLoadError(error || "Failed to load sectors.");
+                        console.error("Error loading stocks");
                         toast({
-                            title: "Error loading sectors",
-                            description: error || "Failed to load sectors.",
+                            title: "Error",
+                            description: "Failed to load stocks.",
                             variant: "destructive",
                         });
                     }
                 } catch (error) {
-                    console.error("Unexpected error loading sectors:", error);
-                    setSectorLoadError("An unexpected error occurred while loading sectors.");
+                    console.error("Error loading stocks:", error);
                     toast({
-                        title: "Error loading sectors",
+                        title: "Error",
                         description: "An unexpected error occurred.",
                         variant: "destructive",
                     });
-                } finally {
-                    setIsLoading(false);
                 }
+            } else if (stock) {
+                setStocks([stock]);
             }
         };
 
-        loadSectors();
-    }, [open, sectors.length, toast]);
+        loadStocks();
+    }, [open, stock, toast]);
 
-    // Load existing notes when dialog opens and stock ID is available
+    // Handle stock selection change - update currency
     useEffect(() => {
-        const loadExistingNotes = async () => {
-            if (open && stock?.id) {
-                setLoadingNotes(true);
-                try {
-                    const { success, data, error } = await getNotesByStockId(stock.id);
-                    if (success && data) {
-                        setExistingNotes(data);
-                        setNotesLoadError(null);
-                    } else {
-                        console.error("Error loading notes:", error);
-                        setNotesLoadError(error || "Failed to load notes.");
-                    }
-                } catch (error) {
-                    console.error("Unexpected error loading notes:", error);
-                    setNotesLoadError("An unexpected error occurred while loading notes.");
-                } finally {
-                    setLoadingNotes(false);
+        const stockId = form.getValues().stockId;
+        if (stockId) {
+            const selectedStock = stocks.find(s => s.id === stockId);
+            if (selectedStock) {
+                setSelectedStockCurrency(selectedStock.currency as Currency);
+                form.setValue("currency", selectedStock.currency as Currency);
+
+                // Check if currency conversion is needed
+                const needsConversion = selectedStock.currency !== userDefaultCurrency;
+                setIsForeignCurrency(needsConversion);
+
+                if (!needsConversion) {
+                    form.setValue("exchangeRate", 1);
+                    form.setValue("fxFee", 0);
                 }
-            } else {
-                setExistingNotes([]); // Clear notes if dialog is closed or no stock
             }
-        };
-
-        loadExistingNotes();
-    }, [open, stock?.id]);
-
-    // Reset includeNewNote state and form values on open
-    useEffect(() => {
-        if (open) {
-            setIncludeNewNote(false);
-            form.setValue("includeNote", false);
-            form.setValue("noteContent", "");
         }
-    }, [open, form]);
+    }, [form.getValues().stockId, stocks, form, userDefaultCurrency]);
 
-    // Update form values when stock prop changes
-    useEffect(() => {
-        form.reset({
-            ticker: stock.ticker,
-            name: stock.name,
-            sectorId: stock.sectorId || "none",
-            currency: stock.currency || "USD",
-            includeNote: false,
-            noteContent: "",
-        });
-        setIncludeNewNote(false);
-    }, [stock, form]);
-
-    // Handle the include new note checkbox
-    const handleIncludeNewNoteChange = (checked: boolean) => {
-        setIncludeNewNote(checked);
-        form.setValue("includeNote", checked); // Update form value for validation
+    // Handle the include note checkbox
+    const handleIncludeNoteChange = (checked: boolean) => {
+        setIncludeNote(checked);
+        form.setValue("includeNote", checked);
     };
 
-    const onSubmit = async (data: StockWithNoteFormValues) => {
+    // Toggle foreign currency fields
+    const handleForeignCurrencyToggle = (checked: boolean) => {
+        setIsForeignCurrency(checked);
+        if (!checked) {
+            form.setValue("exchangeRate", 1);
+            form.setValue("fxFee", 0);
+        }
+    };
+
+    // Calculate total cost based on current form values
+    const calculateTotal = () => {
+        const values = form.getValues();
+        const baseTotal = values.quantity * values.price;
+
+        if (isForeignCurrency && values.exchangeRate) {
+            const convertedTotal = baseTotal * values.exchangeRate;
+            if (values.fxFee) {
+                return values.type === TransactionType.BUY
+                    ? convertedTotal + values.fxFee
+                    : convertedTotal - values.fxFee;
+            }
+            return convertedTotal;
+        }
+
+        return baseTotal;
+    };
+
+    const onSubmit = async (data: TransactionWithNoteFormValues) => {
         setIsLoading(true);
         try {
-            const stockData = {
-                ticker: data.ticker,
-                name: data.name,
-                sectorId: data.sectorId,
-                currency: data.currency,
-            };
+            // If not using foreign currency, set exchange rate to 1 and fx fee to 0
+            if (!isForeignCurrency) {
+                data.exchangeRate = 1;
+                data.fxFee = 0;
+            }
 
-            const result = await updateStock(stock.id, stockData);
+            const result = await createTransaction(data);
 
             if (result.success) {
-                // If including a new note and note content is provided
-                if (data.includeNote && data.noteContent) {
-                    const noteResult = await createNote({
-                        content: data.noteContent,
-                        stockId: stock.id,
-                    });
-                    if (!noteResult.success) {
-                        toast({
-                            title: "Warning",
-                            description: noteResult.error || "Note could not be added.",
-                            variant: "default",
-                        });
-                    }
-                }
-
-                const currencySymbol = getCurrencySymbol(data.currency);
                 toast({
-                    title: "Stock updated",
-                    description: `${data.ticker} has been updated (${currencySymbol} ${data.currency}).`,
+                    title: "Transaction added",
+                    description: `${data.type === TransactionType.BUY ? "Buy" : "Sell"} transaction added successfully.`,
                 });
+                form.reset();
+                setIncludeNote(false);
                 onOpenChange(false);
             } else {
                 toast({
                     title: "Error",
-                    description: result.error || "Failed to update stock.",
+                    description: result.error || "Failed to add transaction.",
                     variant: "destructive",
                 });
             }
@@ -243,130 +248,259 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Edit Stock</DialogTitle>
+                    <DialogTitle>Add Transaction</DialogTitle>
                     <DialogDescription>
-                        Update stock information and view or add new notes.
+                        {stock
+                            ? `Add a new transaction for ${stock.ticker}`
+                            : "Add a new transaction to your portfolio"}
                     </DialogDescription>
                 </DialogHeader>
-
-                {/* Display Existing Notes */}
-                {loadingNotes ? (
-                    <p className="text-muted-foreground text-sm">Loading existing notes...</p>
-                ) : notesLoadError ? (
-                    <p className="text-destructive text-sm">Error loading notes: {notesLoadError}</p>
-                ) : existingNotes.length > 0 ? (
-                    <div className="mb-4">
-                        <h3 className="text-sm font-semibold mb-2">Existing Notes</h3>
-                        <ul className="list-disc pl-4 text-sm text-muted-foreground">
-                            {existingNotes.map((note) => (
-                                <li key={note.id}>{note.content}</li>
-                            ))}
-                        </ul>
-                    </div>
-                ) : (
-                    <p className="text-muted-foreground text-sm mb-4">No existing notes for this stock.</p>
-                )}
-
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        {/* Ticker and Name fields remain the same */}
                         <FormField
                             control={form.control}
-                            name="ticker"
+                            name="stockId"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Ticker Symbol</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            placeholder="AAPL"
-                                            {...field}
-                                            value={field.value}
-                                            onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                                        />
-                                    </FormControl>
+                                    <FormLabel>Stock</FormLabel>
+                                    <Select
+                                        onValueChange={(value) => {
+                                            field.onChange(value);
+                                            // Update currency when stock changes
+                                            const selectedStock = stocks.find(s => s.id === value);
+                                            if (selectedStock) {
+                                                setSelectedStockCurrency(selectedStock.currency as Currency);
+                                                form.setValue("currency", selectedStock.currency as Currency);
+
+                                                // Check if currency conversion is needed
+                                                const needsConversion = selectedStock.currency !== userDefaultCurrency;
+                                                setIsForeignCurrency(needsConversion);
+
+                                                if (!needsConversion) {
+                                                    form.setValue("exchangeRate", 1);
+                                                    form.setValue("fxFee", 0);
+                                                }
+                                            }
+                                        }}
+                                        defaultValue={field.value}
+                                        disabled={!!stock} // Disable if stock is provided
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select a stock" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {stocks.map((stock) => (
+                                                <SelectItem key={stock.id} value={stock.id}>
+                                                    {stock.ticker}: {stock.name} ({getCurrencySymbol(stock.currency)})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
+
                         <FormField
                             control={form.control}
-                            name="name"
+                            name="type"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Company Name</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Apple Inc." {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="currency"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Currency</FormLabel>
+                                    <FormLabel>Transaction Type</FormLabel>
                                     <Select
                                         onValueChange={field.onChange}
                                         defaultValue={field.value}
                                     >
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select a currency" />
+                                                <SelectValue placeholder="Select transaction type" />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="USD">{getCurrencySymbol("USD")} USD - US Dollar</SelectItem>
-                                            <SelectItem value="GBP">{getCurrencySymbol("GBP")} GBP - British Pound</SelectItem>
-                                            <SelectItem value="EUR">{getCurrencySymbol("EUR")} EUR - Euro</SelectItem>
-                                            <SelectItem value="JPY">{getCurrencySymbol("JPY")} JPY - Japanese Yen</SelectItem>
-                                            <SelectItem value="CHF">{getCurrencySymbol("CHF")} CHF - Swiss Franc</SelectItem>
-                                            <SelectItem value="CAD">{getCurrencySymbol("CAD")} CAD - Canadian Dollar</SelectItem>
-                                            <SelectItem value="AUD">{getCurrencySymbol("AUD")} AUD - Australian Dollar</SelectItem>
+                                            <SelectItem value={TransactionType.BUY}>Buy</SelectItem>
+                                            <SelectItem value={TransactionType.SELL}>Sell</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="quantity"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Quantity</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="10"
+                                            {...field}
+                                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="price"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Price per Share ({getCurrencySymbol(selectedStockCurrency)})</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="150.00"
+                                            {...field}
+                                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                        />
+                                    </FormControl>
                                     <FormDescription>
-                                        {field.value !== userDefaultCurrency ?
-                                            `This differs from your default currency (${getCurrencySymbol(userDefaultCurrency)} ${userDefaultCurrency}). Exchange rates will be needed for transactions.` :
-                                            `This matches your default currency (${getCurrencySymbol(userDefaultCurrency)} ${userDefaultCurrency}).`
-                                        }
+                                        Price in {selectedStockCurrency} currency
                                     </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
+
+                        {/* Foreign Currency Checkbox - only show if stock currency differs from user default */}
+                        {selectedStockCurrency !== userDefaultCurrency && (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                <FormControl>
+                                    <Checkbox
+                                        checked={isForeignCurrency}
+                                        onCheckedChange={handleForeignCurrencyToggle}
+                                    />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                    <FormLabel>
+                                        Currency Conversion Required
+                                    </FormLabel>
+                                    <FormDescription>
+                                        The stock currency ({selectedStockCurrency}) differs from your default currency ({userDefaultCurrency}).
+                                        Enable to specify exchange rate and fees.
+                                    </FormDescription>
+                                </div>
+                            </FormItem>
+                        )}
+
+                        {/* Exchange Rate - only shown when foreign currency is enabled */}
+                        {isForeignCurrency && (
+                            <FormField
+                                control={form.control}
+                                name="exchangeRate"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Exchange Rate ({selectedStockCurrency} to {userDefaultCurrency})</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                step="0.0001"
+                                                placeholder="1.0"
+                                                {...field}
+                                                value={field.value || 1}
+                                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Exchange rate to convert {selectedStockCurrency} to {userDefaultCurrency}
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
+                        {/* FX Fee - only shown when foreign currency is enabled */}
+                        {isForeignCurrency && (
+                            <FormField
+                                control={form.control}
+                                name="fxFee"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>FX Fee ({getCurrencySymbol(userDefaultCurrency)})</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                {...field}
+                                                value={field.value || 0}
+                                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Fee charged for currency conversion (in {userDefaultCurrency})
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
+                        {/* Display the total transaction value */}
+                        {form.getValues("quantity") > 0 && form.getValues("price") > 0 && (
+                            <div className="text-sm bg-muted p-3 rounded-md">
+                                <div className="font-medium">Transaction Total:</div>
+                                <div className="text-lg font-bold">
+                                    {formatCurrency(calculateTotal(), userDefaultCurrency)}
+                                </div>
+                                {isForeignCurrency && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                        {form.getValues("quantity")} shares × {getCurrencySymbol(selectedStockCurrency)} {form.getValues("price")}
+                                        {isForeignCurrency ? " × " + form.getValues("exchangeRate") + " exchange rate" : ""}
+                                        {isForeignCurrency && form.getValues("fxFee") ?
+                                            (form.getValues("type") === TransactionType.BUY ?
+                                                " + " : " - ") + getCurrencySymbol(userDefaultCurrency) + form.getValues("fxFee") + " FX fee" :
+                                            ""}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <FormField
                             control={form.control}
-                            name="sectorId"
+                            name="date"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Sector</FormLabel>
-                                    <Select
-                                        onValueChange={(value) => field.onChange(value)}
-                                        value={field.value || "none"}
-                                        disabled={isLoading || sectorLoadError !== null && sectors.length === 0}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={sectorLoadError || "Select a sector"} />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="none">None</SelectItem>
-                                            {sectors.map((sector) => (
-                                                <SelectItem key={sector.id} value={sector.id}>
-                                                    {sector.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                <FormItem className="flex flex-col">
+                                    <FormLabel>Transaction Date</FormLabel>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <FormControl>
+                                                <Button
+                                                    variant={"outline"}
+                                                    className={cn(
+                                                        "w-full pl-3 text-left font-normal",
+                                                        !field.value && "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {field.value ? (
+                                                        format(field.value, "PPP")
+                                                    ) : (
+                                                        <span>Pick a date</span>
+                                                    )}
+                                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={field.value}
+                                                onSelect={field.onChange}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                     <FormMessage />
-                                    {sectorLoadError && (
-                                        <FormMessage className="text-destructive">
-                                            {sectorLoadError}
-                                        </FormMessage>
-                                    )}
                                 </FormItem>
                             )}
                         />
@@ -381,32 +515,32 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
                                             checked={field.value}
                                             onCheckedChange={(checked) => {
                                                 field.onChange(checked);
-                                                handleIncludeNewNoteChange(checked === true); // Use the new handler
+                                                handleIncludeNoteChange(checked === true);
                                             }}
                                         />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>
-                                            Add a new note
+                                            Add a note to this transaction
                                         </FormLabel>
                                         <FormDescription>
-                                            Include a new note for this stock. This will not edit existing notes.
+                                            Include notes about your investment decision or other details
                                         </FormDescription>
                                     </div>
                                 </FormItem>
                             )}
                         />
 
-                        {includeNewNote && (
+                        {includeNote && (
                             <FormField
                                 control={form.control}
                                 name="noteContent"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>New Note</FormLabel>
+                                        <FormLabel>Note</FormLabel>
                                         <FormControl>
                                             <Textarea
-                                                placeholder="Enter your new note here..."
+                                                placeholder="Enter your note here..."
                                                 className="min-h-32"
                                                 {...field}
                                             />
@@ -426,8 +560,8 @@ export default function EditStockForm({ stock, open, onOpenChange }: EditStockFo
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={isLoading || (sectorLoadError !== null && sectors.length === 0)}>
-                                {isLoading ? "Saving..." : "Save Changes"}
+                            <Button type="submit" disabled={isLoading}>
+                                {isLoading ? "Adding..." : "Add Transaction"}
                             </Button>
                         </DialogFooter>
                     </form>
