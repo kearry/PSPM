@@ -32,12 +32,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getCurrencySymbol } from "@/lib/utils";
+import { Currency } from "@/lib/validators";
 
 interface User {
     id: string;
     name: string;
     email: string;
-    defaultCurrency: string;
+    defaultCurrency: Currency;
 }
 
 interface UserProfileFormProps {
@@ -53,7 +54,7 @@ export default function UserProfileForm({ user }: UserProfileFormProps) {
         defaultValues: {
             name: user.name,
             email: user.email,
-            defaultCurrency: user.defaultCurrency || "GBP",
+            defaultCurrency: (user.defaultCurrency || "GBP") as Currency,
         },
     });
 
@@ -127,7 +128,7 @@ export default function UserProfileForm({ user }: UserProfileFormProps) {
                                 <FormItem>
                                     <FormLabel>Default Currency</FormLabel>
                                     <Select
-                                        onValueChange={field.onChange}
+                                        onValueChange={field.onChange as (value: string) => void}
                                         defaultValue={field.value}
                                     >
                                         <FormControl>
