@@ -99,13 +99,11 @@ export default async function DashboardPage() {
 
                 <RecentTransactions
                     transactions={recentTransactions}
-                    userCurrency={userCurrency}
                 />
             </div>
 
             <StockSummary
                 stocks={stocksWithHoldings}
-                userCurrency={userCurrency}
             />
         </div>
     );

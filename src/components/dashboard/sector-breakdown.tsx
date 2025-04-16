@@ -16,6 +16,7 @@ interface SectorBreakdownProps {
         value: number;
         percentage: number;
     }[];
+    currency?: string; // Add currency prop with optional marker
 }
 
 // Generate colors for the pie chart
@@ -24,7 +25,7 @@ const COLORS = [
     "#00BFFF", "#8884D8", "#82CA9D", "#FF6B6B", "#FFA07A"
 ];
 
-export default function SectorBreakdown({ sectors }: SectorBreakdownProps) {
+export default function SectorBreakdown({ sectors, currency = 'GBP' }: SectorBreakdownProps) {
     // If no sectors, display a fallback
     if (sectors.length === 0) {
         return (
@@ -70,7 +71,7 @@ export default function SectorBreakdown({ sectors }: SectorBreakdownProps) {
                                 ))}
                             </Pie>
                             <Tooltip
-                                formatter={(value: number) => formatCurrency(value)}
+                                formatter={(value: number) => formatCurrency(value, currency)}
                             />
                         </PieChart>
                     </ResponsiveContainer>
@@ -83,7 +84,7 @@ export default function SectorBreakdown({ sectors }: SectorBreakdownProps) {
                                 style={{ backgroundColor: COLORS[index % COLORS.length] }}
                             />
                             <div className="flex-1 font-medium">{sector.name}</div>
-                            <div>{formatCurrency(sector.value)}</div>
+                            <div>{formatCurrency(sector.value, currency)}</div>
                         </div>
                     ))}
                 </div>

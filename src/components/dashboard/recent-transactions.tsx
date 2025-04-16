@@ -46,8 +46,8 @@ export default function RecentTransactions({ transactions }: RecentTransactionsP
                             <div key={transaction.id} className="flex items-center">
                                 <div
                                     className={`mr-3 flex h-9 w-9 items-center justify-center rounded-full ${transaction.type === TransactionType.BUY
-                                            ? "bg-green-100 dark:bg-green-900"
-                                            : "bg-red-100 dark:bg-red-900"
+                                        ? "bg-green-100 dark:bg-green-900"
+                                        : "bg-red-100 dark:bg-red-900"
                                         }`}
                                 >
                                     {transaction.type === TransactionType.BUY ? (
