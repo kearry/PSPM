@@ -33,6 +33,8 @@ model Stock {
   transactions Transaction[]
   notes        Note[]
   currency     String         @default("USD") // Currency for the stock
+
+  @@unique([userId, ticker])
 }
 
 model Transaction {

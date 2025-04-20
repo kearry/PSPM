@@ -1,3 +1,4 @@
+// src/app/stocks/[id]/page.tsx
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getStockById } from "@/actions/stocks";
@@ -6,14 +7,15 @@ import StockHeader from "@/components/stocks/stock-header";
 import StockDetails from "@/components/stocks/stock-details";
 import StockTransactions from "@/components/stocks/stock-transactions";
 import StockNotes from "@/components/stocks/stock-notes";
+import { Currency } from "@/lib/validators"; // Import the Currency type
 
 interface StockPageProps {
-    params: {
-        id: string;
-    };
+    params: { id: string };
 }
 
-export async function generateMetadata({ params }: StockPageProps): Promise<Metadata> {
+export async function generateMetadata({
+    params,
+}: StockPageProps): Promise<Metadata> {
     const { success, data, error } = await getStockById(params.id);
 
     if (!success || !data) {
@@ -38,15 +40,23 @@ export default async function StockPage({ params }: StockPageProps) {
     // Calculate stock details
     const averagePrice = calculateAveragePrice(stock.transactions);
     const holdings = calculateTotalHoldings(stock.transactions);
-    const value = holdings * averagePrice;
+    const value = holdings * averagePrice; // Note: This assumes average price reflects current value
 
+    // Enhance the stock object and cast the currency type
     const enhancedStock = {
         ...stock,
         averagePrice,
         holdings,
         value,
-        notes: stock.notes || [], // Ensure notes are available
+        currency: (stock.currency || "USD") as Currency, // Cast stock currency
+        notes: stock.notes || [],
     };
+
+    // Map over transactions to cast their currency type
+    const typedTransactions = stock.transactions.map((tx) => ({
+        ...tx,
+        currency: (tx.currency || stock.currency || "USD") as Currency, // Cast transaction currency
+    }));
 
     // Log for debugging
     console.log(`Stock ${stock.ticker} has ${stock.notes?.length || 0} notes`);
@@ -60,10 +70,12 @@ export default async function StockPage({ params }: StockPageProps) {
                     <StockDetails stock={enhancedStock} />
                 </div>
                 <div className="md:col-span-4">
-                    <StockTransactions stock={enhancedStock} transactions={stock.transactions} />
+                    <StockTransactions
+                        stock={enhancedStock}
+                        transactions={typedTransactions} // <-- Pass the correctly typed transactions
+                    />
                 </div>
             </div>
-
             <StockNotes stockId={stock.id} notes={stock.notes || []} />
         </div>
     );

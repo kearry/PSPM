@@ -1,53 +1,100 @@
+// -----------------------------------------------------------------------------
+//  src/app/stocks/page.tsx         (complete replacement file)
+// -----------------------------------------------------------------------------
 import { Metadata } from "next";
 import { getStocks, getSectors } from "@/actions/stocks";
 import { getTransactions } from "@/actions/transactions";
+
 import StocksHeader from "@/components/stocks/stocks-header";
-import StocksTable from "@/components/stocks/stocks-table";
-import { calculateAveragePrice, calculateTotalHoldings } from "@/lib/utils";
+import StocksTable, {
+    Stock as StocksTableStockType,
+} from "@/components/stocks/stocks-table";
+
+import {
+    calculateAveragePrice,
+    calculateTotalHoldings,
+} from "@/lib/utils";
+
+import { Currency } from "@/lib/validators";
 
 export const metadata: Metadata = {
     title: "Stocks | Stock Manager",
     description: "Manage your stock portfolio",
 };
 
+/**
+ * Collapse duplicate Stock rows that share the same (userId, ticker).
+ * We keep static fields from the earliest created record and merge
+ * transactions / notes from all duplicates so the UI shows a single,
+ * aggregated position.
+ */
 export default async function StocksPage() {
-    const [stocksResponse, transactionsResponse, sectorsResponse] = await Promise.all([
+    const [stocksRes, txRes, sectorsRes] = await Promise.all([
         getStocks(),
         getTransactions(),
         getSectors(),
     ]);
 
-    const stocks = stocksResponse.success ? stocksResponse.data ?? [] : [];
-    const transactions = transactionsResponse.success ? transactionsResponse.data ?? [] : [];
-    const sectors = sectorsResponse.success ? sectorsResponse.data ?? [] : [];
+    const rawStocks = stocksRes.success ? stocksRes.data ?? [] : [];
+    const transactions = txRes.success ? txRes.data ?? [] : [];
+    const sectors = sectorsRes.success ? sectorsRes.data ?? [] : [];
 
-    // Enhance stock data with calculated fields
-    const enhancedStocks = stocks.map((stock) => {
-        const stockTransactions = transactions.filter(
-            (transaction) => transaction.stockId === stock.id
-        );
+    // ---------------------------------------------------------------------------
+    // 1. Group duplicate stock records by ticker
+    // ---------------------------------------------------------------------------
+    const groups = new Map<
+        string, // ticker
+        {
+            base: typeof rawStocks[number]; // first record encountered
+            txs: typeof transactions;       // combined transactions
+            notes: typeof rawStocks[number]["notes"]; // combined notes
+        }
+    >();
 
-        const averagePrice = calculateAveragePrice(stockTransactions);
-        const holdings = calculateTotalHoldings(stockTransactions);
+    for (const s of rawStocks) {
+        const entry = groups.get(s.ticker);
+        if (entry) {
+            entry.txs.push(
+                ...transactions.filter((t) => t.stockId === s.id),
+            );
+            entry.notes.push(...(s.notes || []));
+        } else {
+            groups.set(s.ticker, {
+                base: s,
+                txs: transactions.filter((t) => t.stockId === s.id),
+                notes: s.notes || [],
+            });
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // 2. Build the array expected by <StocksTable>
+    // ---------------------------------------------------------------------------
+    const enhancedStocks: StocksTableStockType[] = Array.from(
+        groups.values(),
+    ).map(({ base, txs, notes }) => {
+        const averagePrice = calculateAveragePrice(txs);
+        const holdings = calculateTotalHoldings(txs);
         const value = holdings * averagePrice;
 
-        // Make sure we keep the notes data from the original stock object
         return {
-            ...stock,
+            id: base.id, // first record’s id (only used for URL)
+            ticker: base.ticker,
+            name: base.name,
+            sectorId: base.sectorId,
+            sector: base.sector,
             averagePrice,
             holdings,
             value,
-            transactions: stockTransactions.length,
-            notes: stock.notes || [], // Ensure notes are passed along
+            transactions: txs.length,
+            notes,
+            currency: (base.currency || "USD") as Currency,
         };
     });
 
-    // Log for debugging
-    console.log("Stock notes data sample:",
-        enhancedStocks.length > 0 ?
-            `First stock has ${enhancedStocks[0].notes?.length || 0} notes` :
-            "No stocks available");
-
+    // ---------------------------------------------------------------------------
+    // 3. Render
+    // ---------------------------------------------------------------------------
     return (
         <div className="space-y-6">
             <StocksHeader />

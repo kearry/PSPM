@@ -1,3 +1,4 @@
+// src/components/stocks/stock-transactions.tsx
 "use client";
 
 import { useState } from "react";
@@ -14,12 +15,14 @@ import { PlusIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react";
 import Link from "next/link";
 import AddTransactionForm from "@/components/transactions/add-transaction-form";
 import { TransactionType } from "@/lib/constants";
+import { Currency } from "@/lib/validators"; // Import the Currency type
 
 interface Transaction {
     id: string;
     type: string;
     quantity: number;
     price: number;
+    currency: Currency; // Add currency here too for consistency
     date: Date;
 }
 
@@ -27,6 +30,7 @@ interface Stock {
     id: string;
     ticker: string;
     name: string;
+    currency: Currency; // <-- Add the currency field here
 }
 
 interface StockTransactionsProps {
@@ -56,8 +60,7 @@ export default function StockTransactions({
                         </CardDescription>
                     </div>
                     <Button size="sm" onClick={() => setShowAddForm(true)}>
-                        <PlusIcon className="h-4 w-4 mr-2" />
-                        Add Transaction
+                        <PlusIcon className="h-4 w-4 mr-2" /> Add Transaction
                     </Button>
                 </div>
             </CardHeader>
@@ -109,8 +112,8 @@ export default function StockTransactions({
                                         </div>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        @ {formatCurrency(transaction.price)} per share •{" "}
-                                        {formatCurrency(transaction.price * transaction.quantity)} total
+                                        @ {formatCurrency(transaction.price, transaction.currency)} per share •{" "}
+                                        {formatCurrency(transaction.price * transaction.quantity, transaction.currency)} total
                                     </p>
                                 </div>
                             </div>
@@ -118,9 +121,8 @@ export default function StockTransactions({
                     </div>
                 )}
             </CardContent>
-
             <AddTransactionForm
-                stock={stock}
+                stock={stock} // This stock object now includes the currency
                 open={showAddForm}
                 onOpenChange={setShowAddForm}
             />

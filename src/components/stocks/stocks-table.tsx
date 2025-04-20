@@ -1,3 +1,4 @@
+// src/components/stocks/stocks-table.tsx
 "use client";
 
 import { useState } from "react";
@@ -24,27 +25,24 @@ import {
     TrashIcon,
     FileTextIcon,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/utils";
 import EditStockForm from "@/components/stocks/edit-stock-form";
 import DeleteStockDialog from "@/components/stocks/delete-stock-dialog";
+import { Currency } from "@/lib/validators";
 
-interface Stock {
+// Export the Stock interface
+export interface Stock {
     id: string;
     ticker: string;
     name: string;
     sectorId: string | null;
-    sector: {
-        id: string;
-        name: string;
-    } | null;
+    sector: { id: string; name: string } | null;
     averagePrice: number;
     holdings: number;
     value: number;
-    transactions: number;
-    notes?: {
-        id: string;
-        content: string;
-    }[];
+    currency: Currency; // Expects Currency type
+    transactions: number; // Expects number (count)
+    notes?: { id: string; content: string; }[];
 }
 
 interface Sector {
@@ -53,7 +51,7 @@ interface Sector {
 }
 
 interface StocksTableProps {
-    stocks: Stock[];
+    stocks: Stock[]; // Uses the exported interface
     sectors: Sector[];
 }
 
@@ -94,7 +92,13 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                 ? valueA.localeCompare(valueB)
                 : valueB.localeCompare(valueA);
         }
-
+        if (sortBy === "currency") {
+            const valueA = a.currency || "";
+            const valueB = b.currency || "";
+            return sortDirection === "asc"
+                ? valueA.localeCompare(valueB)
+                : valueB.localeCompare(valueA);
+        }
         const valueA = a[sortBy];
         const valueB = b[sortBy];
 
@@ -103,11 +107,9 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                 ? valueA.localeCompare(valueB)
                 : valueB.localeCompare(valueA);
         }
-
         if (typeof valueA === "number" && typeof valueB === "number") {
             return sortDirection === "asc" ? valueA - valueB : valueB - valueA;
         }
-
         return 0;
     });
 
@@ -144,7 +146,6 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                     </SelectContent>
                 </Select>
             </div>
-
             <Card>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
@@ -155,7 +156,7 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                         className="text-left font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("ticker")}
                                     >
-                                        Ticker
+                                        Ticker{" "}
                                         {sortBy === "ticker" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
@@ -166,7 +167,7 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                         className="text-left font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("name")}
                                     >
-                                        Company
+                                        Company{" "}
                                         {sortBy === "name" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
@@ -177,18 +178,22 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                         className="text-left font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("sector")}
                                     >
-                                        Sector
+                                        Sector{" "}
                                         {sortBy === "sector" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
                                             </span>
                                         )}
                                     </th>
+                                    <th className="text-center font-medium py-4 px-3 cursor-pointer hover:bg-muted/50" onClick={() => handleSort("currency")} >
+                                        Currency{' '}
+                                        {sortBy === 'currency' && <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+                                    </th>
                                     <th
                                         className="text-right font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("holdings")}
                                     >
-                                        Shares
+                                        Shares{" "}
                                         {sortBy === "holdings" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
@@ -199,7 +204,7 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                         className="text-right font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("averagePrice")}
                                     >
-                                        Avg Price
+                                        Avg Price{" "}
                                         {sortBy === "averagePrice" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
@@ -210,7 +215,7 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                         className="text-right font-medium py-4 px-6 cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleSort("value")}
                                     >
-                                        Value
+                                        Value{" "}
                                         {sortBy === "value" && (
                                             <span className="ml-1">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
@@ -224,7 +229,10 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                             <tbody className="divide-y">
                                 {filteredStocks.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                                        <td
+                                            colSpan={9} // Adjusted colspan
+                                            className="py-6 text-center text-muted-foreground"
+                                        >
                                             {stocks.length === 0
                                                 ? "No stocks in your portfolio. Add your first stock to get started."
                                                 : "No stocks match your filters."}
@@ -243,18 +251,21 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                             </td>
                                             <td className="py-4 px-6">{stock.name}</td>
                                             <td className="py-4 px-6">{stock.sector?.name || "—"}</td>
+                                            <td className="py-4 px-3 text-center">
+                                                <span className="text-xs font-medium">
+                                                    {getCurrencySymbol(stock.currency)} {stock.currency}
+                                                </span>
+                                            </td>
                                             <td className="py-4 px-6 text-right">
-                                                {stock.holdings > 0
-                                                    ? stock.holdings.toFixed(2)
-                                                    : "0.00"}
+                                                {stock.holdings > 0 ? stock.holdings.toFixed(2) : "0.00"}
                                             </td>
                                             <td className="py-4 px-6 text-right">
                                                 {stock.averagePrice > 0
-                                                    ? formatCurrency(stock.averagePrice)
+                                                    ? formatCurrency(stock.averagePrice, stock.currency) // Use stock currency
                                                     : "—"}
                                             </td>
                                             <td className="py-4 px-6 text-right font-medium">
-                                                {formatCurrency(stock.value)}
+                                                {formatCurrency(stock.value, stock.currency)} {/* Use stock currency */}
                                             </td>
                                             <td className="py-4 px-6 text-center">
                                                 {stock.notes && stock.notes.length > 0 ? (
@@ -263,19 +274,27 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                                             <FileTextIcon className="h-5 w-5" />
                                                         </div>
                                                         <div className="invisible absolute z-10 w-64 -translate-x-1/2 -translate-y-8 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground opacity-0 shadow-md transition-all group-hover:visible group-hover:opacity-100">
-                                                            <div className="font-semibold mb-1">{stock.notes.length} {stock.notes.length === 1 ? 'note' : 'notes'}</div>
+                                                            <div className="font-semibold mb-1">
+                                                                {stock.notes.length}{" "}
+                                                                {stock.notes.length === 1 ? "note" : "notes"}
+                                                            </div>
                                                             <div className="line-clamp-2 text-muted-foreground">
                                                                 {stock.notes[0].content}
                                                             </div>
                                                             <div className="text-right mt-1">
-                                                                <Link href={`/stocks/${stock.id}`} className="text-primary text-xs hover:underline">
+                                                                <Link
+                                                                    href={`/stocks/${stock.id}`}
+                                                                    className="text-primary text-xs hover:underline"
+                                                                >
                                                                     View all
                                                                 </Link>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">No notes</span>
+                                                    <span className="text-muted-foreground text-xs">
+                                                        No notes
+                                                    </span>
                                                 )}
                                             </td>
                                             <td className="py-4 px-6 text-right">
@@ -288,18 +307,16 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuItem
-                                                            onClick={() => setStockToEdit(stock)}
+                                                            onClick={() => setStockToEdit(stock)} // stock already includes currency here
                                                             className="cursor-pointer"
                                                         >
-                                                            <PencilIcon className="mr-2 h-4 w-4" />
-                                                            Edit
+                                                            <PencilIcon className="mr-2 h-4 w-4" /> Edit
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
-                                                            onClick={() => setStockToDelete(stock)}
+                                                            onClick={() => setStockToDelete(stock)} // stock already includes currency here
                                                             className="cursor-pointer text-destructive focus:text-destructive"
                                                         >
-                                                            <TrashIcon className="mr-2 h-4 w-4" />
-                                                            Delete
+                                                            <TrashIcon className="mr-2 h-4 w-4" /> Delete
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -312,20 +329,18 @@ export default function StocksTable({ stocks, sectors }: StocksTableProps) {
                     </div>
                 </CardContent>
             </Card>
-
             {stockToEdit && (
                 <EditStockForm
-                    stock={stockToEdit}
+                    stock={stockToEdit} // Pass the stock object which now matches the required type
                     open={!!stockToEdit}
                     onOpenChange={(open) => {
                         if (!open) setStockToEdit(null);
                     }}
                 />
             )}
-
             {stockToDelete && (
                 <DeleteStockDialog
-                    stock={stockToDelete}
+                    stock={stockToDelete} // Pass the stock object
                     open={!!stockToDelete}
                     onOpenChange={(open) => {
                         if (!open) setStockToDelete(null);

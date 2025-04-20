@@ -1,33 +1,55 @@
+// path: src/components/transactions/transactions-actions.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { PencilIcon, TrashIcon } from "lucide-react";
-import EditTransactionForm from "@/components/transactions/edit-transaction-form";
+
+import EditTransactionForm, {
+    EditFormTransaction,
+} from "@/components/transactions/edit-transaction-form";
 import DeleteTransactionDialog from "@/components/transactions/delete-transaction-dialog";
+import { Currency } from "@/lib/validators";
 
-interface Transaction {
+interface StockForEdit {
     id: string;
-    type: string;
-    quantity: number;
-    price: number;
-    date: Date;
-    stock: {
-        id: string;
-        ticker: string;
-        name: string;
-    };
+    ticker: string;
+    name: string;
+    currency: Currency;
 }
 
-interface TransactionActionsProps {
-    transaction: Transaction;
+interface TransactionsActionsProps {
+    /** A fully‑typed transaction that already contains `currency` */
+    transaction: EditFormTransaction;
 }
 
-export default function TransactionActions({ transaction }: TransactionActionsProps) {
+export default function TransactionsActions({
+    transaction,
+}: TransactionsActionsProps) {
     const router = useRouter();
     const [showEditForm, setShowEditForm] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+    const transactionForDelete = {
+        id: transaction.id,
+        type: transaction.type,
+        quantity: transaction.quantity,
+        stock: {
+            ticker: transaction.stock.ticker,
+            name: transaction.stock.name,
+        },
+    };
+
+    const stocksForEdit: StockForEdit[] = [
+        {
+            id: transaction.stock.id,
+            ticker: transaction.stock.ticker,
+            name: transaction.stock.name,
+            currency: transaction.stock.currency,
+        },
+    ];
 
     return (
         <div className="flex gap-2">
@@ -36,34 +58,36 @@ export default function TransactionActions({ transaction }: TransactionActionsPr
                 size="sm"
                 onClick={() => setShowEditForm(true)}
             >
-                <PencilIcon className="h-4 w-4 mr-2" />
+                <PencilIcon className="mr-2 h-4 w-4" />
                 Edit
             </Button>
+
             <Button
                 variant="outline"
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 onClick={() => setShowDeleteDialog(true)}
             >
-                <TrashIcon className="h-4 w-4 mr-2" />
+                <TrashIcon className="mr-2 h-4 w-4" />
                 Delete
             </Button>
 
+            {/* ---- edit ---- */}
             <EditTransactionForm
                 transaction={transaction}
-                stocks={[transaction.stock]}
+                stocks={stocksForEdit}
                 open={showEditForm}
                 onOpenChange={setShowEditForm}
             />
 
+            {/* ---- delete ---- */}
             <DeleteTransactionDialog
-                transaction={transaction}
+                transaction={transactionForDelete}
                 open={showDeleteDialog}
                 onOpenChange={(open) => {
                     if (!open) {
                         setShowDeleteDialog(false);
                     } else if (!open && !transaction.id) {
-                        // If deleted successfully, redirect to transactions list
                         router.push("/transactions");
                     }
                 }}
